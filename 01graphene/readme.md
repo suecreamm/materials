@@ -1,3 +1,3 @@
 # Graphene's VASP Geometry File
 
-![screenshot](graphene_img.jpg)
+![graphene_vesta_img](graphene_img.jpg)
