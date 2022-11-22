@@ -1,1 +1,1 @@
-![screenshot](/graphene_img.jpg)
+![screenshot](graphene_img.jpg)
