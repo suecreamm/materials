@@ -1,4 +1,7 @@
 # Carbon Nanotubes' VESTA Geometry File (VASP POSCAR)
+<a href="https://sue-creator.github.io/cnt_generator/" target="_blank" rel="noopener noreferrer">🔮 Web Carbon Nanotubes Geometry Generator for VASP</a><br>
+This generates carbon nanotubes' structures on your web browser right away. No installation is needed! 
+
 Zigzag Carbon Nanotube (6, 0)
 ![CNT_vesta_img](CNT_60_img.jpg)
 
