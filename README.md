@@ -16,8 +16,8 @@ This generates carbon nanotubes' structures on your web browser right away. No i
 
 ### B001_phononJobAuto.sh
 With Phonopy, you can get the phonon dispersion.
-```$phonopy -d --dim 2 2 2
+``` $phonopy -d --dim 2 2 2 ```
 This gets us a set of supercells.
 
-```$bash B001_phononJobAuto.sh
+``` $bash B001_phononJobAuto.sh ```
 Just run this script, then this would automatically assign your cluster jobs for the phonon calculations. My script may be efficient when Phonopy gives us more than 10 structures.
