@@ -2,6 +2,12 @@
 
 ## 1 Graphene
 
+- VASP Input Files: POSCAR, INCAR, KPOINTS
+
+  You can get graphene's ...
+- Density of States
+- Electronic Bandstructures (G-M-K-G)
+
 ## 2 Carbon Nanotubes
 
 ### Carbon Nanotubes' Atomic Structures(VASP POSCAR & CIF)
