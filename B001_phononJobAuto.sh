@@ -1,3 +1,6 @@
+#!/bin/bash
+
+#conda activate phonopy
 #phonopy -d --dim 2 2 2 --pa auto -c POSCAR
   
 for m in `ls POSCAR-0*`
