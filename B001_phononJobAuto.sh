@@ -8,15 +8,14 @@ cp ../CONTCAR POSCAR
 cp ../INCAR .
 sed -i '/ISIF/d; /IBRION/d; /EDIFF/d; /IALGO/d; /LREAL/d; /LWAVE/d; /LCHARGE/d; /PREC/d; /ISMEAR/d; /SIGMA/d;' INCAR
 
-sed -i '$a\
-PREC = Accurate;
-IBRION = -1;
-EDIFF = 1e-08;
-ISMEAR = 0; SIGMA = 0.01;
-IALGO = 38;
-LREAL = .FALSE.;
-LWAVE = .FALSE.;
-LCHARG = .FALSE.;' INCAR
+sed -i '$a PREC = Accurate' INCAR
+sed -i '$a IBRION = -1' INCAR
+sed -i '$a EDIFF = 1e-08' INCAR
+sed -i '$a ISMEAR = 0; SIGMA = 0.01' INCAR
+sed -i '$a IALGO = 38' INCAR
+sed -i '$a LREAL = .FALSE.' INCAR
+sed -i '$a LWAVE = .FALSE.' INCAR
+sed -i '$a LCHARG = .FALSE.' INCAR
 
 cp ../KPOINTS .
 sed -i '$d' KPOINTS
