@@ -156,6 +156,19 @@ python plot_phonon_dispersion.py --freq matdyn.freq.gp
 ```bash
 python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --qpath qpath.in   --out phonon.png
 ```
+- qpath.in 형식은 아래에.
+
+**Unit / range control**
+```bash
+python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --unit mev   --emin -10 --emax 80
+```
+
+**Notes**
+- 🖥️ Matplotlib `Agg` backend 사용 (GUI 불필요)
+- 📍 Γ / M / K 등 high-symmetry point 자동 표시
+- 🔄 `.freq.gp`가 없을 경우 raw `.freq`도 파싱 가능
+
+
 **qpath.in**
 ```bash
 $ more qpath.in
@@ -165,16 +178,6 @@ $ more qpath.in
 0.333333  0.333333  0.0  50  K
 0.0  0.0  0.0    50  G
 ```
-**Unit / range control**
-```bash
-python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --unit mev   --emin -10 --emax 80
-```
-
-
-**Notes**
-- 🖥️ Matplotlib `Agg` backend 사용 (GUI 불필요)
-- 📍 Γ / M / K 등 high-symmetry point 자동 표시
-- 🔄 `.freq.gp`가 없을 경우 raw `.freq`도 파싱 가능
 
 ---
 
@@ -321,6 +324,27 @@ Generate a headless phonon dispersion plot from QE `matdyn.x` results
 **Basic usage**
 ```bash
 python plot_phonon_dispersion.py --freq matdyn.freq.gp
+```
+
+**With high-symmetry labels**
+```bash
+python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --qpath qpath.in   --out phonon.png
+```
+- qpath.in below!
+
+**Unit / range control**
+```bash
+python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --unit mev   --emin -10 --emax 80
+```
+
+**qpath.in**
+```bash
+$ more qpath.in
+4
+0.0  0.0  0.0    50  G
+0.5  0.0  0.0    50  M
+0.333333  0.333333  0.0  50  K
+0.0  0.0  0.0    50  G
 ```
 
 ---
