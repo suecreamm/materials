@@ -148,7 +148,7 @@ DFT band와 Wannier-interpolated band를 비교하여
 
 **Typical usage**
 ```bash
-python wannier_plot_check.py
+python wannier_plot_check.py scf_band.dat wannier_band.dat
 ```
 
 **Notes**
@@ -160,7 +160,7 @@ python wannier_plot_check.py
 ### `postprocess.sh` 🚀 <a id="postprocesssh-ko"></a>
 
 **Purpose**  
-SLURM 환경에서 post-processing 스크립트들을  
+SLURM 환경에서 EPW process 후 post-processing 스크립트들을  
 일괄 실행하기 위한 wrapper 스크립트입니다.
 
 **Usage**
@@ -170,6 +170,7 @@ sbatch postprocess.sh
 
 **Notes**
 - 🛠️ SLURM directive는 클러스터 환경에 맞게 수정 필요
+- `postprocess_epw.py`와 job submit 스크립트(`7501q.sh`)와 같이 사용함.
 
 ---
 
