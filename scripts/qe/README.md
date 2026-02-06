@@ -1,4 +1,4 @@
-# QE / EPW Utility Scripts CLI Terminal Usage
+# Scripts CLI Terminal Usage for QE / EPW Utility 
 Utilities for **Quantum ESPRESSO (QE)** and **EPW** workflows:
 - EPW symlink preparation
 - PDOS overlay plotting
