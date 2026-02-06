@@ -23,8 +23,8 @@ Notes:
 
 #!/bin/bash
 #SBATCH --job-name=EPWpostprocess
-#SBATCH --nodelist=master          
-#SBATCH --partition=master         
+#SBATCH --nodelist=master          # select the node
+#SBATCH --partition=master         # select the node
 #SBATCH --ntasks=1
 #SBATCH --output=%x.%j.out
 #SBATCH --error=%x.%j.err
