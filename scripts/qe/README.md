@@ -1,15 +1,16 @@
 # QE / EPW Utility Scripts ⚙️🧪
 
-Utilities for **Quantum ESPRESSO (QE)** and **EPW** workflows.
+Utilities for **Quantum ESPRESSO (QE)** and **EPW** workflows.  
 Tested with QE version 7.5 and EPW version 6.0.
 
 ---
 
 ## 🌐 Language / 언어
-- 🇰🇷 한국어
-- 🇬🇧 English
+- 🇰🇷 [한국어](#korean)
+- 🇬🇧 [English](#english)
 
 ---
+
 <a id="korean"></a>
 ## 한국어 🇰🇷
 ---
@@ -73,132 +74,6 @@ python link_ph_outputs.py PREFIX --dvscf_dir ./tmp/_ph0
 
 ---
 
-### postprocess_epw.py 🧮 <a id="postprocess_epwpy-ko"></a>
-
-**Purpose**  
-EPW 계산 결과(λ, α²F, Tc 등)를 후처리하기 위한 스크립트입니다.
-
-**Typical usage**
-```bash
-python postprocess_epw.py
-```
-
-**Notes**
-- 📂 EPW output 파일들이 현재 디렉토리에 있어야 함
-- 🧵 SLURM 계산 이후 batch 후처리 단계용
-
----
-
-### wannier_plot_check.py 🔍 <a id="wannier_plot_checkpy-ko"></a>
-
-**Purpose**  
-DFT band와 Wannier-interpolated band를 비교하여  
-**Wannierization 품질을 시각적으로 검증**합니다.
-
-**Typical usage**
-```bash
-python wannier_plot_check.py scf_band.dat wannier_band.dat
-```
-
-**Notes**
-- 📐 DFT band 데이터와 Wannier band 데이터가 모두 필요
-- ⚠️ 정량 분석이 아니라 sanity check 목적
-
----
-
-## 📊 Electronic Structure (Bands / DOS)
-
-### pdosPlot.py 📊 <a id="pdosplotpy-ko"></a>
-
-**Purpose**  
-QE `projwfc.x` 출력 PDOS 파일들을 자동 수집하여  
-**Fermi level 정렬 + spin 처리 포함 PDOS overlay plot**을 생성합니다.
-
-**Where to run**  
-- `*.pdos_*` 파일들과 QE `*.out` 파일이 있는 디렉토리
-
-**Basic usage**
-```bash
-python pdosPlot.py
-```
-
-**Output**
-```text
-<seedname>_pdos_overlay.png
-```
-
-**Notes**
-- 🔎 QE output에서 `the Fermi energy is ... eV` 자동 탐색
-- 🧲 spin-polarized 계산 시:
-  - spin ↑ : positive
-  - spin ↓ : plotted negative
-- ⚙️ 별도 인자 없이 완전 자동 동작
-
----
-
-## 📈 Phonon Analysis
-
-### plot_phonon_dispersion.py 📈 <a id="plot_phonon_dispersionpy-ko"></a>
-
-**Purpose**  
-QE `matdyn.x` 결과(`.freq.gp` 또는 raw `.freq`)로부터  
-GUI 없이(headless) **phonon dispersion plot**을 생성합니다.
-
-**Where to run**  
-- `.freq.gp` 또는 `.freq` 파일이 있는 디렉토리
-
-**Basic usage (recommended)**
-```bash
-python plot_phonon_dispersion.py --freq matdyn.freq.gp
-```
-
-**With high-symmetry labels**
-```bash
-python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --qpath qpath.in   --out phonon.png
-```
-- qpath.in 형식은 아래에.
-
-**Unit / range control**
-```bash
-python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --unit mev   --emin -10 --emax 80
-```
-
-**Notes**
-- 🖥️ Matplotlib `Agg` backend 사용 (GUI 불필요)
-- 📍 Γ / M / K 등 high-symmetry point 자동 표시
-- 🔄 `.freq.gp`가 없을 경우 raw `.freq`도 파싱 가능
-
-
-**qpath.in**
-```bash
-$ more qpath.in
-4
-0.0  0.0  0.0    50  G
-0.5  0.0  0.0    50  M
-0.333333  0.333333  0.0  50  K
-0.0  0.0  0.0    50  G
-```
-
----
-
-## 🚀 Automation / SLURM
-
-### postprocess.sh 🚀 <a id="postprocesssh-ko"></a>
-
-**Purpose**  
-SLURM 환경에서 EPW process 후 post-processing 스크립트들을  
-일괄 실행하기 위한 wrapper 스크립트입니다.
-
-**Usage**
-```bash
-sbatch postprocess.sh
-```
-
-**Notes**
-- 🛠️ SLURM directive는 클러스터 환경에 맞게 수정 필요
-- `postprocess_epw.py`와 job submit 스크립트(`7501q.sh`)와 같이 사용함.
-
----
 <a id="english"></a>
 ## English 🇬🇧
 ---
@@ -226,23 +101,22 @@ sbatch postprocess.sh
 ### link_ph_outputs.py 🔗 <a id="link_ph_outputspy-en"></a>
 
 **Purpose**  
-Create **safe symbolic links** for PH outputs (`dyn`, `dvscf`) so that EPW can locate
-phonon-related files using the naming conventions it expects.
+Creates **safe symbolic links** for PH calculation outputs (`dyn`, `dvscf`)  
+to conform to the **phonon file naming conventions required by EPW**.
 
-This script was written because the **official `pp.py` script distributed with
-the Quantum ESPRESSO package does not work reliably in the author’s computing
-environment**.  
-It is intended as a **practical alternative** that more robustly handles
-file naming and directory layouts required by EPW workflows.
+This script was written as a **practical replacement** for the official  
+Quantum ESPRESSO `pp.py`, which does **not work reliably in the current environment**.  
+Its purpose is to provide a **more stable and environment-independent solution**  
+for EPW-required file naming and directory handling.
 
-Generated filenames:
+Generated names:
 - `PREFIX.dyn_qN`
 - `PREFIX.dvscf_qN`
 - `PREFIX.dvscfN_1`
 
 **Where to run**  
-- In the directory containing `PREFIX.dyn*` files  
-  (typically the working directory where `ph.x` has finished)
+- A directory containing `PREFIX.dyn*` files  
+  (typically the directory where `ph.x` finished)
 
 **Basic usage**
 ```bash
@@ -255,109 +129,7 @@ python link_ph_outputs.py PREFIX --dvscf_dir ./tmp/_ph0
 ```
 
 **Notes**
-- ❌ Never overwrites an existing regular file
+- ❌ Never overwrites existing regular files
 - 🔁 Automatically avoids self-links and duplicate links
-- ✅ Generates multiple dvscf naming variants for EPW compatibility
-- 🔄 Intended as an alternative when the official `pp.py` does not function properly
-
----
-
-### postprocess_epw.py 🧮 <a id="postprocess_epwpy-en"></a>
-
-**Purpose**  
-Post-process EPW results (e.g. λ, α²F, Tc).
-
-**Typical usage**
-```bash
-python postprocess_epw.py
-```
-
-**Notes**
-- 📂 EPW output files must be present in the current directory
-- 🧵 Intended for batch post-processing after SLURM jobs finish
-
----
-
-### wannier_plot_check.py 🔍 <a id="wannier_plot_checkpy-en"></a>
-
-**Purpose**  
-Visually compare DFT bands with Wannier-interpolated bands to  
-**validate the quality of Wannierization**.
-
-**Typical usage**
-```bash
-python wannier_plot_check.py scf_band.dat wannier_band.dat
-```
-
-**Notes**
-- 📐 Requires both DFT band data and Wannier band data
-- ⚠️ Intended as a sanity check, not for quantitative analysis
-
----
-
-## 📊 Electronic Structure (Bands / DOS)
-
-### pdosPlot.py 📊 <a id="pdosplotpy-en"></a>
-
-**Purpose**  
-Automatically collect QE `projwfc.x` PDOS outputs and generate a  
-**PDOS overlay plot with Fermi-level alignment and proper spin handling**.
-
-**Where to run**  
-- In the directory containing `*.pdos_*` files and QE `*.out` outputs
-
-**Basic usage**
-```bash
-python pdosPlot.py
-```
-
----
-
-## 📈 Phonon Analysis
-
-### plot_phonon_dispersion.py 📈 <a id="plot_phonon_dispersionpy-en"></a>
-
-**Purpose**  
-Generate a headless phonon dispersion plot from QE `matdyn.x` results
-(`.freq.gp` or raw `.freq`).
-
-**Basic usage**
-```bash
-python plot_phonon_dispersion.py --freq matdyn.freq.gp
-```
-
-**With high-symmetry labels**
-```bash
-python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --qpath qpath.in   --out phonon.png
-```
-- qpath.in below!
-
-**Unit / range control**
-```bash
-python plot_phonon_dispersion.py   --freq matdyn.freq.gp   --unit mev   --emin -10 --emax 80
-```
-
-**qpath.in**
-```bash
-$ more qpath.in
-4
-0.0  0.0  0.0    50  G
-0.5  0.0  0.0    50  M
-0.333333  0.333333  0.0  50  K
-0.0  0.0  0.0    50  G
-```
-
----
-
-## 🚀 Automation / SLURM
-
-### postprocess.sh 🚀 <a id="postprocesssh-en"></a>
-
-**Purpose**  
-SLURM wrapper script to run EPW-related post-processing steps
-in a single batch job.
-
-**Usage**
-```bash
-sbatch postprocess.sh
-```
+- ✅ Generates multiple dvscf naming variants to support EPW version differences
+- 🔄 Designed as a fallback when the official `pp.py` behaves inconsistently
