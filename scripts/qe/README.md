@@ -131,14 +131,12 @@ GUI 없이 phonon dispersion plot을 생성합니다.
 
 **Usage**
 ```bash
-python plot_phonon_dispersion.py --freq matdyn.freq.gp
-python plot_phonon_dispersion.py --freq matdyn.freq.gp --qpath qpath.in
-python plot_phonon_dispersion.py --freq matdyn.freq.gp --unit mev --emin -10 --emax 80
+python python plot_phonon_dispersion.py --freq TiS2_monolayer
+python plot_phonon_dispersion.py --freq TiS2_monolayer --dos TiS2_monolayer.phdos --qpath qpath.in
+python plot_phonon_dispersion.py --freq TiS2_monolayer --unit thz --emin -10 --emax 80
 ```
 
 **Notes**
-- Matplotlib Agg backend 사용
-- Γ / M / K high-symmetry 자동 표시
 - `.freq.gp` 없으면 raw `.freq`도 파싱 가능
 
 ---
