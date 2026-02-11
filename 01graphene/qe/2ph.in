@@ -1,0 +1,14 @@
+&inputph
+  tr2_ph = 1.0d-14
+  prefix = 'graphene'
+  outdir = './out/'
+  fildyn = 'graphene.dyn'
+  fildvscf = 'graphene.dvscf'
+  ldisp = .true.
+  nq1 = 6
+  nq2 = 6
+  nq3 = 1
+  epsil = .false.
+  electron_phonon = 'dvscf'
+/
+
