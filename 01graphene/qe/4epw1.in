@@ -1,0 +1,78 @@
+&inputepw
+  ! ---- I/O ----
+  prefix    = 'graphene'          ! = PW/PH prefix
+  outdir    = './out'             ! = PW/PH outdir
+  dvscf_dir='./out/_ph0'
+  ! 튜토리얼도 dvscf_dir에 phonon 결과 폴더를 지정함:contentReference[oaicite:2]{index=2}
+
+  ! ---- Core switches (tutorial-style) ----
+  ep_coupling = .true.            ! e-ph coupling workflow on
+  elph        = .true.            ! compute e-ph coefficients
+  epwwrite    = .true.            ! write e-ph matrices in Wannier representation
+  epwread     = .false.           ! first run: do NOT read epmatwp
+  wannierize  = .true.            ! build Wannier functions (W90 library)
+
+  etf_mem     = 0                 ! 0: less mem, more I/O (tutorial example):contentReference[oaicite:3]{index=3}
+
+  ! ---- Wannier subspace ----
+  ! 그래핀 π-밴드(2개 원자 * pz)만 다룰거면 보통 2 Wannier로 시작 가능.
+  nbndsub   = 8
+  num_iter  = 300                 ! Wannier disentanglement iterations (tutorial):contentReference[oaicite:4]{index=4}
+
+  ! disentanglement window (예시값; 당신의 밴드구조/도핑에 맞춰 조정 필요)
+  dis_froz_min = -3.0
+  dis_froz_max =  3.0
+  dis_win_min  = -12.0
+  dis_win_max  =  12.0
+
+  ! projections: graphene π manifold
+  proj(1) = 'random'
+  ! (원하면 sigma까지: 'C:sp2' 류로 확장하는데, 이건 pseudopot/버전에 따라 표현이 달라 "확실하지 않음")
+
+  iverbosity = 2                  ! verbose SC output (tutorial):contentReference[oaicite:5]{index=5}
+
+  ! ---- Smearing windows for EPC ----
+  fsthick  = 0.4                  ! [eV] (tutorial example):contentReference[oaicite:6]{index=6}
+  degaussw = 0.10                 ! [eV] (tutorial example):contentReference[oaicite:7]{index=7}
+  degaussq = 0.50                 ! [meV] (tutorial example):contentReference[oaicite:8]{index=8}
+
+  ! ---- Grids (IMPORTANT) ----
+  ! coarse electronic grid (must be a FULL uniform mesh; 당신이 말한 12x12x1을 반영)
+  nk1 = 12
+  nk2 = 12
+  nk3 = 1
+
+  ! coarse phonon grid (coarse q-mesh; 예시로 6x6x1)
+  nq1 = 6
+  nq2 = 6
+  nq3 = 1
+
+  ! fine grids for interpolation (예시값; 실제론 더 키워야 수렴)
+  mp_mesh_k = .true.              ! tutorial uses irreducible fine mesh:contentReference[oaicite:9]{index=9}
+  nkf1 = 120
+  nkf2 = 120
+  nkf3 = 1
+
+  nqf1 = 60
+  nqf2 = 60
+  nqf3 = 1
+
+  ! ---- Outputs for EPC / superconductivity ----
+  ephwrite  = .true.              ! write ephmatXX etc (tutorial):contentReference[oaicite:10]{index=10}
+
+  eliashberg = .true.             ! enables α2F(ω), λ(ω) outputs etc:contentReference[oaicite:11]{index=11}
+  liso       = .true.             ! isotropic ME (tutorial has liso case for Pb):contentReference[oaicite:12]{index=12}
+  ! laniso   = .true.             ! (선택) anisotropic ME (FSR). 원하면 liso 대신 laniso 사용:contentReference[oaicite:13]{index=13}
+  limag      = .true.
+  lpade      = .true.
+  lacon      = .false.            ! anisotropic에선 비싸서 off 권장(튜토리얼 설명):contentReference[oaicite:14]{index=14}
+
+  nsiter        = 500
+  conv_thr_iaxis = 1.0d-3         ! tutorial value:contentReference[oaicite:15]{index=15}
+  wscut         = 0.5             ! [eV] tutorial value:contentReference[oaicite:16]{index=16}
+
+  muc    = 0.10                   ! μ* (graphene은 보통 더 클 수도/작을 수도 있는데, 이 값은 "가정"임)
+  nstemp = 8
+  temps  = 5 100                  ! 5K~100K 균등 분할 (튜토리얼 형식):contentReference[oaicite:17]{index=17}
+/
+
