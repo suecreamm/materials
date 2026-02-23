@@ -131,9 +131,9 @@ GUI 없이 phonon dispersion plot을 생성합니다.
 
 **Usage**
 ```bash
-python python plot_phonon_dispersion.py --freq TiS2_monolayer
-python plot_phonon_dispersion.py --freq TiS2_monolayer --dos TiS2_monolayer.phdos --qpath qpath.in
-python plot_phonon_dispersion.py --freq TiS2_monolayer --unit thz --emin -10 --emax 80
+python python plot_phonon_dispersion.py --freq graphene.freq.gp
+python plot_phonon_dispersion.py --freq graphene.freq.gp --dos graphene.phdos --qpath qpath.in
+python plot_phonon_dispersion.py --freq graphene.freq.gp --unit thz --emin -10 --emax 80
 ```
 
 **Notes**
