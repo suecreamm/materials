@@ -1,0 +1,64 @@
+&INPUTEPW
+  prefix      = 'pb',
+  outdir      = './tmp'
+  dvscf_dir   = './tmp/_ph0'
+
+  ! ---- Restart from 4.1 ----
+  etf_mem     = 0
+
+  elph        = .true.
+  epwread     = .true.
+  epwwrite    = .false.
+
+  wannierize  = .false.
+  nbndsub     = 4
+
+  bands_skipped = 'exclude_bands = 1-5'
+
+  ! ============================================================
+  ! Electron self-energy
+  ! ============================================================
+  elecselfen  = .true.
+
+  phonselfen  = .false.
+  a2f         = .false.
+
+  ! ---- Fermi level ----
+  !
+  ! Since filkf is a band path, do NOT determine Ef
+  ! from those path points.
+  !
+  ! Start with the coarse-grid Fermi energy from your EPW output:
+  !   Fermi energy coarse grid = 11.945487 eV
+  !
+  efermi_read = .true.
+  fermi_energy = 11.945487
+
+  ! ---- Self-energy settings ----
+  fsthick     = 1.0
+  temps       = 0.075
+  degaussw    = 0.2
+
+  ! ============================================================
+  ! k path where ReSigma / ImSigma are calculated
+  ! ============================================================
+  filkf       = 'pb_band.kpt'
+
+  ! ============================================================
+  ! Uniform q-grid for BZ integration
+  ! ============================================================
+  nqf1 = 12
+  nqf2 = 12
+  nqf3 = 12
+
+  ! ============================================================
+  ! Coarse grids
+  ! ============================================================
+  nk1 = 6
+  nk2 = 6
+  nk3 = 6
+
+  nq1 = 3
+  nq2 = 3
+  nq3 = 3
+/

@@ -1,0 +1,83 @@
+&INPUTEPW
+  prefix      = 'pb',
+  outdir      = './tmp'
+  dvscf_dir   = './tmp/_ph0'
+  !use_ws      = .true.
+  ! ---- Core switches (tutorial-style) ----
+  !phonselfen  = .true.
+  !specfun_ph   = .true.
+
+!wmin_specfun = -0.02
+!wmax_specfun =  0.08
+!nw_specfun   = 801
+ 
+  !delta_approx = .true.
+
+  ep_coupling = .true.            ! e-ph coupling workflow on
+  elph        = .true.            ! compute e-ph coefficients
+  epwwrite    = .true.            ! write e-ph matrices in Wannier representation
+  epwread     = .false.           ! first run: do NOT read epmatwp
+  wannierize  = .true.            ! build Wannier functions (W90 library)
+  etf_mem     = 0                 ! 0: less mem, more I/O (tutorial example)
+  
+
+  wannierize  = .true.
+  nbndsub     = 4
+
+  bands_skipped = 'exclude_bands = 1-5'
+
+  num_iter     = 300
+
+  !dis_win_min  = 
+  dis_win_max   = 21
+  !dis_froz_min  = 
+  dis_froz_max  = 13.5
+
+  proj(1)      = 'Pb:sp3'
+  !proj(2)      = 'S:p'
+
+  wannier_plot = .true.
+
+  wdata(1)  = 'bands_plot = .true.'
+  wdata(2)  = 'begin kpoint_path'
+  wdata(3)  = 'G 0.000 0.000 0.000  X 0.500 0.000 0.500'
+  wdata(4)  = 'X 0.500 0.000 0.500  W 0.500 0.250 0.750'
+  wdata(5)  = 'W 0.500 0.250 0.750  L 0.500 0.500 0.500'
+  wdata(6)  = 'L 0.500 0.500 0.500  G 0.000 0.000 0.000'
+  wdata(7)  = 'G 0.000 0.000 0.000  K 0.375 0.375 0.750'
+  wdata(8)  = 'end kpoint_path'
+  wdata(9)  = 'bands_num_points = 40'
+  wdata(10) = 'dis_num_iter = 200'
+  wdata(11) = 'num_print_cycles = 10'
+  wdata(12) = 'conv_tol = 1E-12'
+  wdata(13) = 'conv_window = 4'
+
+  nkf1         = 1
+  nkf2         = 1
+  nkf3         = 1
+  nqf1         = 1
+  nqf2         = 1
+  nqf3         = 1
+
+  nk1 = 6, nk2 = 6, nk3 = 6
+  nq1 = 3, nq2 = 3, nq3 = 3
+
+
+  !fsthick    = 0.4
+  !degaussw   = 0.1 ! eV
+  !degaussq   = 0.1
+
+  !ephwrite   = .true.
+  !eliashberg = .true.             ! enables α2F(ω), λ(ω) outputs 
+  !liso       = .true.             ! isotropic ME (tutorial has liso case for Pb)
+  !laniso   = .true.             ! (선  택  ) anisotropic ME (FSR). 원  하  면   liso 대  신   laniso 사  용
+  !limag      = .true.
+  !lpade      = .true.
+  !lacon      = .false.            ! anisotropic에  선   비  싸  서   off 권  장  (튜  토  리  얼   설  명  )
+  !nsiter        = 300
+  !conv_thr_iaxis = 1.0d-4         !
+  !wscut         = 0.4             ! [eV]
+  !broyden_beta = 0.2
+  !muc    = 0.10                   ! μ*
+  !temps  = 1 5  
+/

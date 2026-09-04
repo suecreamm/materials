@@ -1,0 +1,55 @@
+&INPUTEPW
+  prefix      = 'pb',
+  outdir      = './tmp'
+  dvscf_dir   = './tmp/_ph0'
+
+  ! ---- Restart from 4.1 ----
+  etf_mem     = 0
+
+  elph        = .true.
+  epwread     = .true.
+  epwwrite    = .false.
+
+  wannierize  = .false.
+  nbndsub     = 4
+
+  bands_skipped = 'exclude_bands = 1-5'
+
+  ! ============================================================
+  ! Eliashberg spectral function / phonon self-energy
+  ! ============================================================
+  phonselfen   = .true.
+  delta_approx = .true.
+  a2f          = .true.
+
+  ! ---- Fermi-surface integration ----
+  fsthick      = 1.0
+  temps        = 0.075
+  degaussw     = 0.2
+
+  ! ============================================================
+  ! Fine interpolation grids
+  !
+  ! These are NOT the original coarse grids.
+  ! EPW interpolates 6x6x63 / 3x3x3 data onto these dense grids.
+  ! ============================================================
+  nkf1 = 12
+  nkf2 = 12
+  nkf3 = 12
+
+  nqf1 = 12
+  nqf2 = 12
+  nqf3 = 12
+
+  ! ============================================================
+  ! Original coarse grids
+  ! MUST match the NSCF / PH calculations used in 4.1
+  ! ============================================================
+  nk1 = 6
+  nk2 = 6
+  nk3 = 6
+
+  nq1 = 3
+  nq2 = 3
+  nq3 = 3
+/

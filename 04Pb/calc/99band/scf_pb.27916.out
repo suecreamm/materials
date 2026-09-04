@@ -1,0 +1,31 @@
+Node list       : node10
+SLURM_NTASKS    : 64
+======================================
+PW_INPUTS        : 1scf.in
+BAND_PW_INPUTS   : 99band.1pw.in
+BANDS_INPUTS     : 99band.2pp.in
+PLOTBAND_INPUTS  : 
+PH_INPUTS        : 
+PDOS_INPUTS      : 
+PW2WAN_INPUTS    : 
+WANN_SEEDS       : 
+EPW_INPUTS        : 
+Q2R_INPUTS        : 
+MATDYN_INPUTS     : 
+======================================
+>>> Running pw.x jobs (standard)
+[PW] 1scf.in -> 1scf.out
+>>> Running pw.x band-path jobs
+[PW-BAND] 99band.1pw.in -> 99band.1pw.out
+>>> Running bands.x jobs (single-core)
+[BANDS] 99band.2pp.in -> 99band.2pp.out
+>>> No PLOTBAND_INPUTS; skipping plotband.x block
+>>> No PH_INPUTS; skipping ph.x block
+>>> No PDOS_INPUTS; skipping projwfc.x block
+>>> No PW2WAN_INPUTS; skipping pw2wannier90.x block
+>>> No WANN_SEEDS; skipping wannier90.x block
+>>> No EPW_INPUTS; skipping epw.x block
+>>> No Q2R_INPUTS; skipping q2r.x block
+>>> No LAMBDA_INPUTS; skipping lambda.x block
+>>> No MATDYN_INPUTS; skipping matdyn.x block
+=== All requested jobs finished ===

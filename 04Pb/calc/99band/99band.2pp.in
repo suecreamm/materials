@@ -1,0 +1,6 @@
+&BANDS
+  prefix  = 'pb'
+  outdir  = './tmp'
+  filband = 'band.dat'
+/
+

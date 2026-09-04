@@ -1,0 +1,36 @@
+&INPUTEPW
+  prefix      = 'pb',
+  outdir      = './tmp',
+  dvscf_dir   = './tmp/_ph0',
+
+  ! ---- Restart from 4.1epw1 ----
+  etf_mem     = 0,
+
+  elph        = .true.,
+  epwread     = .true.,
+  epwwrite    = .false.,
+
+  wannierize  = .false.,
+  nbndsub     = 4,
+
+  bands_skipped = 'exclude_bands = 1-5',
+
+  ! ---- Interpolation quality check ----
+  band_plot   = .true.,
+
+  ! Large window to include the interpolated bands
+  fsthick     = 100.0,
+
+  ! k/q path generated from Wannier90
+  filkf       = 'pb_band.kpt',
+  filqf       = 'pb_band.kpt',
+
+  ! ---- Coarse grids: same as 4.1epw1 ----
+  nk1 = 6,
+  nk2 = 6,
+  nk3 = 6,
+
+  nq1 = 3,
+  nq2 = 3,
+  nq3 = 3,
+/

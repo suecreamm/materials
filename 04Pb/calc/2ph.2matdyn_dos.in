@@ -1,0 +1,9 @@
+&INPUT
+  asr      = 'simple',
+  flfrc    = 'pb.fc',
+  dos      = .true.,
+  fldos    = 'pb.phdos',
+  nk1      = 30,
+  nk2      = 30,
+  nk3      = 30
+/

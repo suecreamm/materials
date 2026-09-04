@@ -1,0 +1,19 @@
+   WARNING: vars.sh does not set up dependencies when invoked directly. Please perform environment setup for UMF before running DPC++ applications.
+Abort(1) on node 5 (rank 5 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 5
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 5)
+Abort(1) on node 17 (rank 17 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 17
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 17)
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+Abort(1) on node 19 (rank 19 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 19
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 19)
+slurmstepd: error: *** STEP 27915.0 ON node10 CANCELLED AT 2026-09-04T21:05:48 ***
+Abort(1) on node 33 (rank 33 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 33
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 33)
+Abort(1) on node 38 (rank 38 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 38
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 38)
+Abort(1) on node 55 (rank 55 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 55
+In: PMI_Abort(1, application called MPI_Abort(MPI_COMM_WORLD, 1) - process 55)
+srun: error: node10: tasks 0-4,6-16,18,20-32,34-37,39-54,56-63: Killed
+srun: error: node10: tasks 5,17,19,33,38,55: Exited with exit code 1
+srun: error: node10: task 0: Exited with exit code 1
+Abort(1) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 1) - process 0

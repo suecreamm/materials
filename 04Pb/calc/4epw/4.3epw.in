@@ -1,0 +1,36 @@
+&INPUTEPW
+  prefix      = 'pb',
+  outdir      = './tmp'
+  dvscf_dir   = './tmp/_ph0'
+
+  etf_mem     = 0
+
+  elph        = .true.
+  epwread     = .true.
+  epwwrite    = .false.
+
+  wannierize  = .false.
+  nbndsub     = 4
+  bands_skipped = 'exclude_bands = 1-5'
+
+  phonselfen   = .true.
+  delta_approx = .true.
+
+  fsthick      = 1.0
+  temps        = 0.075 5
+  degaussw     = 0.2
+
+  filqf        = 'pb_band.kpt'
+
+  nkf1 = 20
+  nkf2 = 20
+  nkf3 = 20
+
+  nk1 = 6
+  nk2 = 6
+  nk3 = 6
+
+  nq1 = 3
+  nq2 = 3
+  nq3 = 3
+/

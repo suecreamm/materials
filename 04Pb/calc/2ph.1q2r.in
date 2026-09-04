@@ -1,0 +1,5 @@
+&INPUT
+  zasr='simple',
+  fildyn='pb.dyn',
+  flfrc='pb.fc'
+/
