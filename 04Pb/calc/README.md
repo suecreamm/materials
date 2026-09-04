@@ -1,5 +1,13 @@
 ## Pb EPW Example
 
+## Table of Contents
+- [Workflow](#workflow)
+- [Phonon Dispersion](#phonon-dispersion)
+- [Phonon Linewidth & Electron–Phonon Coupling](#phonon-linewidth--electronphonon-coupling)
+- [Eliashberg Spectral Function](#eliashberg-spectral-function)
+- [Electron Self-Energy](#electron-self-energy)
+- [References](#references)
+
 ### Workflow
 [![EPW workflow](EPW_workflow.png)](EPW_workflow.png)
 
