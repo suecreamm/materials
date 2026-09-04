@@ -4,7 +4,11 @@
 [![EPW workflow](EPW_workflow.png)](EPW_workflow.png)
 
 ### Phonon Dispersion
-[![Phonon dispersion](phonon_dispersion.png)](phonon_dispersion.png)
+<p align="center">
+  <a href="phonon_dispersion.png">
+    <img src="phonon_dispersion.png" alt="Phonon dispersion" width="600">
+  </a>
+</p>
 
 ### Phonon Linewidth & Electron–Phonon Coupling
 Mode-resolved phonon linewidth and electron–phonon coupling.
@@ -28,7 +32,11 @@ For states within 50 meV of the Fermi level:
 - Maximum linewidth: 26.862 meV
 - Mean lifetime: 48.19 fs
 
-[![Electron self-energy](4epw/elself_bands.png)](4epw/elself_bands.png)
+<p align="center">
+  <a href="4epw/elself_bands.png">
+    <img src="4epw/elself_bands.png" alt="Electron self-energy" width="600">
+  </a>
+</p>
 
 ### References
 
