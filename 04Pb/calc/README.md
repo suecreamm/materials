@@ -14,7 +14,11 @@ Mode-resolved phonon linewidth and electron–phonon coupling.
 ### Eliashberg Spectral Function
 The Eliashberg spectral function, α²F(ω), was calculated using EPW, giving an electron–phonon coupling constant of λ = 0.686.
 
-[![Eliashberg spectral function](4epw/a2f.png)](4epw/a2f.png)
+<p align="center">
+  <a href="4epw/a2f.png">
+    <img src="4epw/a2f.png" alt="Eliashberg spectral function" width="600">
+  </a>
+</p>
 
 ### Electron Self-Energy
 `99elself.py` post-processes `linewidth.elself.0.075K` and analyzes the electron self-energy along the selected k-path.
