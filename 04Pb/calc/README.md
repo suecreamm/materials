@@ -69,7 +69,7 @@ $$
 \tau_{n\mathbf{k}} \approx \frac{\hbar}{\Gamma_{n\mathbf{k}}}
 $$
 
-The figure below maps the calculated linewidth onto the electronic band structure, making it possible to identify regions in reciprocal space where electron–phonon scattering is particularly strong. States close to the Fermi level are particularly relevant for low-energy electronic scattering processes.
+The figure below shows the calculated linewidth along the electronic band structure and highlights regions in reciprocal space where electron–phonon scattering is strong. States close to the Fermi level are particularly relevant for low-energy electronic scattering processes.
 
 <p align="center">
   <a href="4epw/elself_bands.png">
