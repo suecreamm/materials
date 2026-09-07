@@ -10,7 +10,6 @@ Features
 - Reads phonon-smearing values and integrated lambda from the summary
 - Saves PNG + PDF
 - Can plot one smearing curve or all smearing curves
-- Styled to resemble a dark-background publication/presentation figure
 
 Examples
 --------
@@ -31,11 +30,43 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 
 SEARCH_DIRS = [Path("."), Path("..")]
 CM1_PER_MEV = 8.06554429
 CM1_PER_THZ = 33.3564095
+
+
+# ==========================================================
+# Shared plot style
+# ==========================================================
+STYLE = {
+    "line_lw": 1.6,
+    "line_capstyle": "round",
+    "curve_color": "red",
+    "fill": dict(color="red", alpha=0.15),
+    "zero_line": dict(lw=1.0, color="0.35", zorder=0),
+    "grid": dict(linestyle="-", linewidth=0.8, color="0.82", alpha=0.9),
+    "spine_lw": 1.2,
+    "spine_color": "black",
+    "tick": dict(width=1.2, length=5),
+}
+
+FS = dict(title=24, label=24, tick=16, legend=16)
+
+
+def _apply_frame(ax) -> None:
+    for spine in ax.spines.values():
+        spine.set_linewidth(STYLE["spine_lw"])
+        spine.set_color(STYLE["spine_color"])
+
+
+def _line_kw(lw: Optional[float] = None, **kw) -> dict:
+    out = dict(lw=STYLE["line_lw"] if lw is None else lw,
+               solid_capstyle=STYLE["line_capstyle"])
+    out.update(kw)
+    return out
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,6 +111,8 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional figure title."
     )
+    ap.add_argument("--color", default=STYLE["curve_color"],
+                    help="Curve colour for the single-smearing plot (default: red).")
     ap.add_argument("--xmin", type=float, default=None)
     ap.add_argument("--xmax", type=float, default=None)
     ap.add_argument("--ymax", type=float, default=None)
@@ -229,47 +262,34 @@ def choose_curve(smearings: np.ndarray, requested: Optional[float]) -> int:
 
 
 def style_axes(ax: plt.Axes) -> None:
-    ax.set_facecolor("black")
-
-    # ticks
-    ax.tick_params(
-        axis="both",
-        which="major",
-        labelsize=16,
-        colors="white",
-        width=1.5,
-        length=7,
-        direction="out",
-        top=True,
-        right=True
-    )
-
-    # spines
-    for spine in ax.spines.values():
-        spine.set_visible(True)
-        spine.set_color("white")
-        spine.set_linewidth(1.2)
-
-    # grid
-    ax.grid(
-        True,
-        which="major",
-        color="0.7",
-        linewidth=1.8,
-        alpha=1.0
-    )
+    """Frame, ticks, and horizontal guides shared with the dispersion plotter."""
+    ax.tick_params(axis="both", which="major", labelsize=FS["tick"],
+                   direction="out", **STYLE["tick"])
+    ax.grid(axis="y", **STYLE["grid"])
+    ax.grid(axis="x", visible=False)
+    _apply_frame(ax)
 
 
-def make_single_curve_legend(ax: plt.Axes, sm: float, lam: float) -> None:
+def _style_legend(leg) -> None:
+    frame = leg.get_frame()
+    frame.set_facecolor("white")
+    frame.set_edgecolor("black")
+    frame.set_linewidth(STYLE["spine_lw"])
+    leg.set_zorder(10)
+
+
+def make_single_curve_legend(ax: plt.Axes, sm: float, lam: float, color: str) -> None:
+    """Legend handle drawn in the same colour as the plotted curve."""
     label = rf"$\sigma_{{ph}}$ = {sm:g} meV"
     if np.isfinite(lam):
         label += "\n" + rf"$\lambda$ = {lam:.6f}"
 
-    handles = ax.plot([], [], lw=2.5, label=label)
+    handles = [Line2D([], [], color=color, label=label,
+                      **_line_kw(2.2))]
     leg = ax.legend(
         handles=handles,
         loc="upper left",
-        fontsize=20,
+        fontsize=FS["legend"],
         frameon=True,
         fancybox=False,
         framealpha=1.0,
@@ -278,14 +298,7 @@ def make_single_curve_legend(ax: plt.Axes, sm: float, lam: float) -> None:
         handletextpad=0.9,
         labelspacing=0.3
     )
-
-    frame = leg.get_frame()
-    frame.set_facecolor("white")
-    frame.set_edgecolor("black")
-    frame.set_linewidth(1.5)
-
-    for text in leg.get_texts():
-        text.set_color("black")
+    _style_legend(leg)
 
 
 def make_all_smearings_legend(ax: plt.Axes) -> None:
@@ -300,14 +313,14 @@ def make_all_smearings_legend(ax: plt.Axes) -> None:
         handletextpad=0.7,
         labelspacing=0.25
     )
+    _style_legend(leg)
 
-    frame = leg.get_frame()
-    frame.set_facecolor("white")
-    frame.set_edgecolor("black")
-    frame.set_linewidth(1.3)
 
-    for text in leg.get_texts():
-        text.set_color("black")
+def smearing_colors(n: int) -> List[tuple]:
+    """Red family, light to dark, so multiple smearings stay in one colour language."""
+    if n <= 1:
+        return [matplotlib.colors.to_rgba(STYLE["curve_color"])]
+    return [plt.cm.Reds(v) for v in np.linspace(0.40, 0.95, n)]
 
 
 def main() -> None:
@@ -321,11 +334,10 @@ def main() -> None:
     print(f"[INFO] points       : {len(x)}")
     print(f"[INFO] smearings    : {', '.join(f'{v:g}' for v in smearings)} meV")
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.8))
-    fig.patch.set_facecolor("black")
-    style_axes(ax)
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     if args.all_smearings:
+        colors = smearing_colors(len(smearings))
         for j, sm in enumerate(smearings):
             lam = lambdas[j] if j < len(lambdas) else np.nan
 
@@ -333,12 +345,7 @@ def main() -> None:
             if np.isfinite(lam):
                 label += rf", $\lambda$ = {lam:.6f}"
 
-            ax.plot(
-                x,
-                a2f[:, j],
-                lw=2.0,
-                label=label
-            )
+            ax.plot(x, a2f[:, j], **_line_kw(color=colors[j], label=label, zorder=3))
 
         make_all_smearings_legend(ax)
         print(f"[INFO] plotting     : all {len(smearings)} smearing curves")
@@ -348,14 +355,10 @@ def main() -> None:
         sm = smearings[j]
         lam = lambdas[j] if j < len(lambdas) else np.nan
 
-        # actual curve
-        ax.plot(x, a2f[:, j], lw=2.4)
-
-        # filled area
-        ax.fill_between(x, 0.0, a2f[:, j], alpha=0.90)
-
-        # separate boxed legend like the example image
-        make_single_curve_legend(ax, sm, lam)
+        ax.plot(x, a2f[:, j], **_line_kw(color=args.color, zorder=3))
+        ax.fill_between(x, 0.0, a2f[:, j], linewidth=0, zorder=2,
+                        color=args.color, alpha=STYLE["fill"]["alpha"])
+        make_single_curve_legend(ax, sm, lam, args.color)
 
         print(f"[INFO] smearing     : {sm:g} meV")
         if np.isfinite(lam):
@@ -364,18 +367,14 @@ def main() -> None:
     if lambda_sum is not None:
         print(f"[INFO] summed lambda: {lambda_sum:.7f}")
 
-    # labels
-    ax.set_xlabel(xlabel, fontsize=20, color="white", labelpad=10)
-    ax.set_ylabel(r"$\alpha^2F(\omega)$", fontsize=20, color="white", labelpad=10)
-
-    # optional title only
+    ax.set_xlabel(xlabel, fontsize=FS["label"], labelpad=10)
+    ax.set_ylabel(r"$\alpha^2F(\omega)$", fontsize=FS["label"], labelpad=10)
     if args.title:
-        ax.set_title(args.title, fontsize=20, color="white", pad=12)
+        ax.set_title(args.title, fontsize=FS["title"], pad=12)
 
-    # zero line
-    ax.axhline(0.0, lw=1.0, color="white")
+    ax.axhline(0.0, **STYLE["zero_line"])
+    style_axes(ax)
 
-    # limits
     if args.xmin is not None or args.xmax is not None:
         ax.set_xlim(
             args.xmin if args.xmin is not None else float(np.nanmin(x)),
@@ -398,17 +397,8 @@ def main() -> None:
     out_png = f"{out_base}.png"
     out_pdf = f"{out_base}.pdf"
 
-    fig.savefig(
-        out_png,
-        dpi=args.dpi,
-        facecolor=fig.get_facecolor(),
-        bbox_inches="tight"
-    )
-    fig.savefig(
-        out_pdf,
-        facecolor=fig.get_facecolor(),
-        bbox_inches="tight"
-    )
+    fig.savefig(out_png, dpi=args.dpi, transparent=True)
+    fig.savefig(out_pdf, transparent=True)
     plt.close(fig)
 
     print(f"[OK] Saved: {out_png}")
