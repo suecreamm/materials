@@ -6,16 +6,10 @@ with optional EPW phonon-linewidth and mode-resolved lambda overlays.
 ---------------------------------------------------------------------
 - Headless (Matplotlib 'Agg'), saves PNG + PDF by default.
 - Dispersion supports *.freq.gp (gnuplot table) and raw *.freq (&plot header).
+- Optional EPW overlays: linewidth.phself.*K and lambda.phself.*K are auto-detected.
+- Lambda is shown as a shaded band around each selected phonon branch.
 - Auto high-symmetry (HS) labeling from qpath.in.
 - Optional phonon DOS panel on the right (width ratio 5:1).
-- Optional EPW overlays: linewidth.phself.*K and lambda.phself.*K are auto-detected.
-- Lambda is shown as a red shaded band around each selected phonon branch.
-
-Search behaviour
-----------------
-Every input (.freq.gp / .freq, .phdos, qpath.in, linewidth.phself.*K) is looked
-up in the current directory first, then in the parent directory '..'.
-Missing DOS / qpath / EPW files are skipped without crashing.
 
 Typical QE workflow:
   ph.x -> q2r.x -> matdyn.x (dispersion + DOS)
@@ -53,6 +47,61 @@ SEARCH_DIRS = [Path("."), Path("..")]
 
 _RE_LW_T = re.compile(r"linewidth\.phself\.(\d+(?:\.\d+)?)K$")
 _RE_LAMBDA_T = re.compile(r"lambda\.phself\.(\d+(?:\.\d+)?)K$")
+
+
+# ==========================================================
+# Shared plot style
+# ==========================================================
+STYLE = {
+    # every dispersion / DOS curve uses this line language
+    "line_lw": 1.6,
+    "line_capstyle": "round",
+    # horizontal zero reference
+    "zero_line": dict(lw=1.0, color="0.35", zorder=0),
+    # light horizontal guides only
+    "grid": dict(linestyle="-", linewidth=0.8, color="0.82", alpha=0.9),
+    # darker vertical high-symmetry separators
+    "hs_line": dict(linestyle="-", linewidth=1.25, color="0.45", alpha=0.95, zorder=0),
+    # strong rectangular frame
+    "spine_lw": 1.2,
+    "spine_color": "black",
+    # tick geometry
+    "ytick": dict(width=1.2, length=5),
+    "xtick": dict(width=1.2, length=0, pad=6),
+    # unselected branches
+    "muted_color": "0.65",
+    # DOS panel
+    "dos_line": dict(lw=1.0, color="0.35"),
+    "dos_fill": dict(color="0.72", alpha=0.55),
+}
+
+# font sizes: single-panel figures can carry the large reference labels,
+# multi-panel pages use the same proportions at a reduced scale
+FS_SINGLE = dict(title=24, ylabel=24, ytick=16, hs=24,
+                 dos_label=16, dos_tick=12, legend=11, note=12)
+FS_MULTI = dict(title=15, ylabel=16, ytick=13, hs=18,
+                dos_label=13, dos_tick=11, legend=10, note=10)
+
+
+def _apply_frame(ax) -> None:
+    """Strong rectangular frame shared by every panel."""
+    for spine in ax.spines.values():
+        spine.set_linewidth(STYLE["spine_lw"])
+        spine.set_color(STYLE["spine_color"])
+
+
+def _apply_grid(ax) -> None:
+    """Horizontal guides only."""
+    ax.grid(axis="y", **STYLE["grid"])
+    ax.grid(axis="x", visible=False)
+
+
+def _line_kw(lw: Optional[float] = None, **kw) -> dict:
+    """Common keyword set for every curve drawn in this script."""
+    out = dict(lw=STYLE["line_lw"] if lw is None else lw,
+               solid_capstyle=STYLE["line_capstyle"])
+    out.update(kw)
+    return out
 
 
 # ==========================================================
@@ -124,7 +173,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--band-color-lo", default="dodgerblue", help="Low-group colour.")
     ap.add_argument("--band-color-hi", default="darkorange", help="High-group colour.")
     ap.add_argument("--band-alpha", type=float, default=0.35, help="Band opacity.")
-    ap.add_argument("--band-lw", type=float, default=1.0, help="Dispersion line width.")
+    ap.add_argument("--band-lw", type=float, default=STYLE["line_lw"],
+                    help="Dispersion line width (default: shared plot style).")
 
     # ---- lambda overlay controls ----
     ap.add_argument("--lambda-scale", type=float, default=2.0,
@@ -202,8 +252,45 @@ def resolve_dispersion(freq_arg: Optional[str]) -> Tuple[Path, str]:
     )
 
 
-def resolve_dos(dos_arg: Optional[str], prefix: str, disabled: bool) -> Optional[Path]:
-    """Locate the phonon DOS file. Non-fatal."""
+def _find_in(dirs: List[Path], names: List[str]) -> Optional[Path]:
+    """First existing file among names, searched in the given directories."""
+    for d in dirs:
+        for n in names:
+            p = d / n
+            if p.exists() and p.is_file():
+                return p
+    return None
+
+
+def _glob_first_in(dirs: List[Path], pattern: str) -> Optional[Path]:
+    """First file matching a glob pattern in the given directories."""
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for h in sorted(d.glob(pattern)):
+            if h.is_file():
+                return h
+    return None
+
+
+def _dos_search_dirs(freq_path: Optional[Path]) -> List[Path]:
+    """The dispersion directory comes first, then the usual search path."""
+    dirs: List[Path] = []
+    seen = set()
+    for d in ([freq_path.parent] if freq_path is not None else []) + SEARCH_DIRS:
+        try:
+            key = d.resolve()
+        except OSError:
+            key = d
+        if key not in seen:
+            seen.add(key)
+            dirs.append(d)
+    return dirs
+
+
+def resolve_dos(dos_arg: Optional[str], prefix: str, disabled: bool,
+                freq_path: Optional[Path] = None) -> Optional[Path]:
+    """Locate the phonon DOS file, preferring the dispersion directory. Non-fatal."""
     if disabled:
         return None
     if dos_arg:
@@ -212,14 +299,21 @@ def resolve_dos(dos_arg: Optional[str], prefix: str, disabled: bool) -> Optional
             return p
         print(f"[WARN] --dos not found, skipping DOS: {dos_arg}")
         return None
+
+    pfx = prefix or (freq_path.name.split(".")[0] if freq_path is not None else "")
     names: List[str] = []
-    if prefix:
-        names += [f"{prefix}_phdos", f"{prefix}.phdos",
-                  f"{prefix}_phdos.dat", f"{prefix}.phdos.dat"]
-    found = _find(names) if names else None
-    if found is None:
-        found = _glob_first("*.phdos") or _glob_first("*_phdos")
-    return found
+    if pfx:
+        names += [f"{pfx}_phdos", f"{pfx}.phdos",
+                  f"{pfx}_phdos.dat", f"{pfx}.phdos.dat"]
+
+    # one directory at a time, so the dispersion directory always wins
+    for d in _dos_search_dirs(freq_path):
+        hit = (_find_in([d], names) if names else None)
+        if hit is None:
+            hit = _glob_first_in([d], "*.phdos") or _glob_first_in([d], "*_phdos")
+        if hit is not None:
+            return hit
+    return None
 
 
 def resolve_qpath(qpath_arg: Optional[str]) -> Optional[Path]:
@@ -330,10 +424,23 @@ def load_freq_table(path_any: Path) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def load_dos_2col(path_dos: Path) -> Tuple[np.ndarray, np.ndarray]:
-    """Load a DOS file as two columns: freq(cm^-1) dos."""
-    data = np.loadtxt(str(path_dos))
-    if data.ndim != 2 or data.shape[1] < 2:
-        raise ValueError(f"Bad DOS table (need >=2 cols): {path_dos}")
+    """Load a DOS file as two columns: freq(cm^-1) dos. Text headers are skipped."""
+    rows: List[List[float]] = []
+    with path_dos.open("r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            toks = s.split()
+            if len(toks) < 2:
+                continue
+            try:
+                rows.append([float(toks[0]), float(toks[1])])
+            except ValueError:
+                continue
+    if not rows:
+        raise ValueError(f"Bad DOS table (need >=2 numeric cols): {path_dos}")
+    data = np.asarray(rows, dtype=float)
     f_cm1 = data[:, 0].astype(float)
     dos = data[:, 1].astype(float)
     idx = np.argsort(f_cm1)
@@ -666,13 +773,13 @@ def draw_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
 
     for j in range(nb_disp):
         if j not in sel:
-            ax.plot(q_path, y_disp[:, j], "-", lw=args.band_lw,
-                    color="0.65", zorder=3)
+            ax.plot(q_path, y_disp[:, j], "-",
+                    **_line_kw(args.band_lw, color=STYLE["muted_color"], zorder=3))
 
     if g_disp is None:
         for j in sel:
-            ax.plot(q_path, y_disp[:, j], "-", lw=args.band_lw,
-                    color=args.band_color_lo, zorder=4)
+            ax.plot(q_path, y_disp[:, j], "-",
+                    **_line_kw(args.band_lw, color=args.band_color_lo, zorder=4))
         return []
 
     if args.band_split is None:
@@ -692,7 +799,7 @@ def draw_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
             half = A * g_disp[:, j]
             ax.fill_between(q_path, w - half, w + half, color=col,
                             alpha=args.band_alpha, linewidth=0, zorder=4)
-            ax.plot(q_path, w, "-", lw=args.band_lw, color=col, zorder=5)
+            ax.plot(q_path, w, "-", **_line_kw(args.band_lw, color=col, zorder=5))
         handles.append(Patch(facecolor=col, alpha=args.band_alpha, edgecolor=col,
                              label=rf"$\omega \pm {A:g}\,\gamma$"))
     return handles
@@ -716,7 +823,7 @@ def lambda_on_qpath(q_idx: np.ndarray, lambda_vals: np.ndarray,
 
 def draw_lambda_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
                       lambda_disp: Optional[np.ndarray], sel: List[int], args) -> List[Patch]:
-    """Draw lambda as red shaded omega +/- scale*lambda bands on selected branches."""
+    """Draw lambda as shaded omega +/- scale*lambda bands on selected branches."""
     if lambda_disp is None:
         return []
     handles: List[Patch] = []
@@ -728,8 +835,8 @@ def draw_lambda_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
         ax.fill_between(q_path, w - half, w + half,
                         color=args.lambda_color, alpha=args.lambda_alpha,
                         linewidth=0, zorder=5.5)
-        ax.plot(q_path, w, "-", lw=args.band_lw,
-                color=args.lambda_color, alpha=0.85, zorder=6)
+        ax.plot(q_path, w, "-",
+                **_line_kw(args.band_lw, color=args.lambda_color, alpha=0.85, zorder=6))
     if used:
         handles.append(Patch(facecolor=args.lambda_color, alpha=args.lambda_alpha,
                              edgecolor=args.lambda_color,
@@ -753,7 +860,7 @@ def draw_bubbles(ax, x: np.ndarray, y: np.ndarray, g: np.ndarray, args,
     return g_ref
 
 
-def bubble_legend(ax, g_ref: float, args) -> None:
+def bubble_legend(ax, g_ref: float, args, fs: dict) -> None:
     """Add a size reference legend for the bubbles."""
     if g_ref <= 0:
         return
@@ -768,7 +875,7 @@ def bubble_legend(ax, g_ref: float, args) -> None:
                    label=f"{f * g_ref:.3g}")
         )
     leg = ax.legend(handles=handles, title="gamma (meV)", loc="upper right",
-                    fontsize=9, title_fontsize=9, labelspacing=1.4,
+                    fontsize=fs["legend"], title_fontsize=fs["legend"], labelspacing=1.4,
                     borderpad=0.9, handletextpad=1.6, framealpha=0.85)
     leg.set_zorder(10)
 
@@ -778,12 +885,12 @@ def bubble_legend(ax, g_ref: float, args) -> None:
 # ==========================================================
 def apply_common_axis_style(ax, q_path: np.ndarray, y_disp: np.ndarray,
                             labels: List[str], tick_idx: List[int],
-                            ylabel: str, title: str, args,
+                            ylabel: str, title: str, args, fs: dict,
                             show_xticklabels: bool = True,
                             show_ylabel: bool = True,
                             show_yticklabels: bool = True) -> None:
     """Apply the common cosmetics for each dispersion-style subplot."""
-    ax.axhline(0.0, lw=0.8, color="black", zorder=2)
+    ax.axhline(0.0, **STYLE["zero_line"])
 
     if (args.emin is not None) or (args.emax is not None):
         lo = args.emin if args.emin is not None else float(np.nanmin(y_disp))
@@ -792,55 +899,55 @@ def apply_common_axis_style(ax, q_path: np.ndarray, y_disp: np.ndarray,
     ax.set_xlim(float(np.min(q_path)), float(np.max(q_path)))
 
     ax.set_xlabel("")
-    ax.set_title(title, fontsize=13)
-    if show_ylabel:
-        ax.set_ylabel(ylabel, fontsize=13)
-    else:
-        ax.set_ylabel("")
-    ax.tick_params(axis="y", labelsize=11)
+    ax.set_title(title, fontsize=fs["title"], pad=12)
+    ax.set_ylabel(ylabel if show_ylabel else "", fontsize=fs["ylabel"])
+
+    ax.tick_params(axis="y", labelsize=fs["ytick"], **STYLE["ytick"])
+    ax.tick_params(axis="x", labelsize=fs["hs"], **STYLE["xtick"])
     if not show_yticklabels:
         ax.tick_params(axis="y", labelleft=False)
+
+    _apply_grid(ax)
 
     if labels and tick_idx and len(labels) == len(tick_idx):
         tick_pos = [q_path[i] for i in tick_idx]
         ax.set_xticks(tick_pos)
-        if show_xticklabels:
-            ax.set_xticklabels(labels, fontsize=14)
-        else:
-            ax.set_xticklabels([])
+        ax.set_xticklabels(labels if show_xticklabels else [], fontsize=fs["hs"])
         for xv in tick_pos:
-            ax.axvline(xv, linestyle="--", linewidth=0.7, color="gray", alpha=0.6, zorder=1)
+            ax.axvline(xv, **STYLE["hs_line"])
     else:
         ax.set_xticks([])
 
-    ax.grid(alpha=0.3, zorder=0)
+    _apply_frame(ax)
 
 
 def draw_dispersion_base(ax, q_path: np.ndarray, y_disp: np.ndarray,
                          sel: List[int], args, selected_color: str = "tab:blue") -> None:
     """Draw the plain phonon branches before adding an overlay."""
     for j in range(y_disp.shape[1]):
-        col = selected_color if j in sel else "0.65"
-        ax.plot(q_path, y_disp[:, j], "-", lw=args.band_lw, color=col, zorder=3)
+        col = selected_color if j in sel else STYLE["muted_color"]
+        ax.plot(q_path, y_disp[:, j], "-", **_line_kw(args.band_lw, color=col, zorder=3))
 
 
-def draw_dos_panel(ax_dos, dos: Tuple[np.ndarray, np.ndarray], unit: str) -> None:
+def draw_dos_panel(ax_dos, dos: Tuple[np.ndarray, np.ndarray], unit: str, fs: dict) -> None:
     """Draw the single shared DOS panel."""
     dos_f_cm1, dos_val = dos
     y_dos, _ = convert_units_from_cm1(dos_f_cm1, unit)
-    ax_dos.plot(dos_val, y_dos, "-", lw=1.8, color="tab:blue")
-    ax_dos.fill_betweenx(y_dos, 0.0, dos_val, alpha=0.20, color="tab:blue")
-    ax_dos.set_xlabel("DOS", fontsize=11)
-    ax_dos.grid(alpha=0.3)
-    ax_dos.tick_params(axis="x", labelsize=10)
+    ax_dos.plot(dos_val, y_dos, "-",
+                **_line_kw(STYLE["dos_line"]["lw"], color=STYLE["dos_line"]["color"]))
+    ax_dos.fill_betweenx(y_dos, 0.0, dos_val, linewidth=0, **STYLE["dos_fill"])
+    ax_dos.set_xlabel("DOS", fontsize=fs["dos_label"])
+    _apply_grid(ax_dos)
+    ax_dos.tick_params(axis="x", labelsize=fs["dos_tick"], width=1.2, length=4)
     plt.setp(ax_dos.get_yticklabels(), visible=False)
     ax_dos.tick_params(axis="y", length=0)
+    _apply_frame(ax_dos)
 
 
-def annotate_missing_overlay(ax, message: str) -> None:
+def annotate_missing_overlay(ax, message: str, fs: dict) -> None:
     """Put a light message inside an axis when a given overlay is missing."""
     ax.text(0.5, 0.06, message, transform=ax.transAxes,
-            ha="center", va="bottom", fontsize=10, color="0.35",
+            ha="center", va="bottom", fontsize=fs["note"], color="0.35",
             bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="0.85", alpha=0.85))
 
 
@@ -885,26 +992,28 @@ def make_plain_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
                     out_base: str, args) -> None:
     """Fallback plot when no linewidth/lambda data are present."""
     unit = args.unit
+    fs = FS_SINGLE
     y_disp, ylabel = convert_units_from_cm1(freqs_cm1, unit)
 
     if dos is not None:
-        fig = plt.figure(figsize=(10, 4.4))
+        fig = plt.figure(figsize=(10, 6))
         gs = gridspec.GridSpec(1, 2, width_ratios=[5, 1], wspace=0.05)
         ax = fig.add_subplot(gs[0, 0])
         ax_dos = fig.add_subplot(gs[0, 1], sharey=ax)
     else:
-        fig, ax = plt.subplots(figsize=(8, 4.4))
+        fig, ax = plt.subplots(figsize=(8, 6))
         ax_dos = None
 
     sel = list(range(y_disp.shape[1]))
     draw_dispersion_base(ax, q_path, y_disp, sel, args, selected_color="tab:blue")
     title = args.title if args.title else "Phonon dispersion"
-    apply_common_axis_style(ax, q_path, y_disp, labels, tick_idx, ylabel, title, args, show_xticklabels=True)
+    apply_common_axis_style(ax, q_path, y_disp, labels, tick_idx, ylabel, title, args, fs,
+                            show_xticklabels=True)
 
     if ax_dos is not None and dos is not None:
-        draw_dos_panel(ax_dos, dos, unit)
+        draw_dos_panel(ax_dos, dos, unit, fs)
 
-    fig.subplots_adjust(left=0.10, right=0.97, top=0.92, bottom=0.12)
+    fig.tight_layout()
     out_png, out_pdf = f"{out_base}.png", f"{out_base}.pdf"
     fig.savefig(out_png, dpi=args.dpi, transparent=True)
     fig.savefig(out_pdf, transparent=True)
@@ -920,6 +1029,7 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
                       out_base: str, args, total_temps: int) -> None:
     """Plot up to two temperatures per file, with linewidth left, lambda middle, DOS right."""
     unit = args.unit
+    fs = FS_MULTI
     y_disp, ylabel = convert_units_from_cm1(freqs_cm1, unit)
 
     n_used = len(temp_entries)
@@ -928,11 +1038,11 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
     has_dos = dos is not None
 
     fig_w = 13 if has_dos else 11
-    fig_h = 4.3 * nrows
+    fig_h = 4.8 * nrows
     ncols = 3 if has_dos else 2
     width_ratios = [4.7, 4.7, 1.3] if has_dos else [1, 1]
     fig = plt.figure(figsize=(fig_w, fig_h))
-    gs = gridspec.GridSpec(nrows, ncols, width_ratios=width_ratios, hspace=0.20, wspace=0.08)
+    gs = gridspec.GridSpec(nrows, ncols, width_ratios=width_ratios, hspace=0.28, wspace=0.14)
 
     row_axes = []
     for i in range(nrows):
@@ -976,14 +1086,14 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
         if args.style == "band":
             band_handles = draw_bands(ax_lw, q_path, y_disp, g_disp, sel, args)
             if g_disp is None:
-                annotate_missing_overlay(ax_lw, "No linewidth data")
+                annotate_missing_overlay(ax_lw, "No linewidth data", fs)
             elif band_handles:
-                ax_lw.legend(handles=band_handles, loc="upper right", fontsize=10,
+                ax_lw.legend(handles=band_handles, loc="upper right", fontsize=fs["legend"],
                              framealpha=0.85).set_zorder(10)
         else:
             draw_dispersion_base(ax_lw, q_path, y_disp, sel, args, selected_color="tab:blue")
             if g_disp is None:
-                annotate_missing_overlay(ax_lw, "No linewidth data")
+                annotate_missing_overlay(ax_lw, "No linewidth data", fs)
             else:
                 if args.bubble_on == "epw":
                     x, y, g_arr, n_drop = build_bubbles(
@@ -1002,13 +1112,13 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
                     g_arr = np.concatenate(gs_) if gs_ else np.array([])
                 g_ref = draw_bubbles(ax_lw, x, y, g_arr, args, unit)
                 print(f"[INFO] linewidth bubbles drawn = {x.size}, gamma_ref = {g_ref:.6g}")
-                bubble_legend(ax_lw, g_ref, args)
+                bubble_legend(ax_lw, g_ref, args, fs)
 
         lw_title = f"Linewidth, T = {T_show:.3f} K"
         if args.title:
-            lw_title = f"{args.title} — linewidth, T = {T_show:.3f} K"
+            lw_title = f"{args.title} - linewidth, T = {T_show:.3f} K"
         apply_common_axis_style(ax_lw, q_path, y_disp, labels, tick_idx,
-                                ylabel, lw_title, args,
+                                ylabel, lw_title, args, fs,
                                 show_xticklabels=show_xticklabels,
                                 show_ylabel=True,
                                 show_yticklabels=True)
@@ -1017,29 +1127,29 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
         draw_dispersion_base(ax_lam, q_path, y_disp, sel, args, selected_color=args.lambda_color)
         lambda_handles = draw_lambda_bands(ax_lam, q_path, y_disp, lambda_disp, sel, args)
         if lambda_disp is None:
-            annotate_missing_overlay(ax_lam, "No lambda data")
+            annotate_missing_overlay(ax_lam, "No lambda data", fs)
         elif lambda_handles:
-            ax_lam.legend(handles=lambda_handles, loc="upper right", fontsize=10,
+            ax_lam.legend(handles=lambda_handles, loc="upper right", fontsize=fs["legend"],
                           framealpha=0.85).set_zorder(10)
 
         lam_title = f"Lambda, T = {T_show:.3f} K"
         if args.title:
-            lam_title = f"{args.title} — lambda, T = {T_show:.3f} K"
+            lam_title = f"{args.title} - lambda, T = {T_show:.3f} K"
         apply_common_axis_style(ax_lam, q_path, y_disp, labels, tick_idx,
-                                ylabel, lam_title, args,
+                                ylabel, lam_title, args, fs,
                                 show_xticklabels=show_xticklabels,
                                 show_ylabel=False,
                                 show_yticklabels=False)
 
         # ---- right panel: DOS, once per row and sharing the same y-scale
         if ax_dos is not None and dos is not None:
-            draw_dos_panel(ax_dos, dos, unit)
-            ax_dos.set_title("Phonon DOS" if i == 0 else "", fontsize=13)
+            draw_dos_panel(ax_dos, dos, unit, fs)
+            ax_dos.set_title("Phonon DOS" if i == 0 else "", fontsize=fs["title"], pad=12)
             if not show_xticklabels:
                 ax_dos.set_xlabel("")
                 ax_dos.tick_params(axis="x", labelbottom=False)
 
-    fig.subplots_adjust(left=0.07, right=0.98, top=0.94, bottom=0.09)
+    fig.subplots_adjust(left=0.07, right=0.98, top=0.93, bottom=0.09)
     out_png, out_pdf = f"{out_base}.png", f"{out_base}.pdf"
     fig.savefig(out_png, dpi=args.dpi, transparent=True)
     fig.savefig(out_pdf, transparent=True)
@@ -1055,7 +1165,7 @@ def main() -> None:
     args = parse_args()
 
     freq_path, prefix = resolve_dispersion(args.freq)
-    dos_path = resolve_dos(args.dos, prefix, args.no_dos)
+    dos_path = resolve_dos(args.dos, prefix, args.no_dos, freq_path)
     qpath_path = resolve_qpath(args.qpath)
     epw_files = resolve_epw(args.epw_dir, args.no_epw)
     lambda_files = resolve_lambda(args.epw_dir, args.no_epw or args.no_lambda)
