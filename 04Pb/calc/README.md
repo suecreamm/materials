@@ -60,13 +60,13 @@ The spectral shape of $\alpha^2F(\omega)$ shows which phonon modes contribute mo
 The electron self-energy provides a momentum- and band-resolved description of electron–phonon scattering. The imaginary part of the self-energy determines the quasiparticle linewidth,
 
 $$
-\Gamma_{n\mathbf{k}} = 2\,\mathrm{Im}\Sigma_{n\mathbf{k}},
+\Gamma_{n\mathbf{k}} = 2\mathrm{Im}\Sigma_{n\mathbf{k}}
 $$
 
-which is directly related to the finite quasiparticle lifetime,
+which is related to the quasiparticle scattering rate and, within the quasiparticle picture, as an inverse lifetime or scattering rate.
 
 $$
-\tau_{n\mathbf{k}} = \frac{\hbar}{\Gamma_{n\mathbf{k}}}
+\tau_{n\mathbf{k}} \approx \frac{\hbar}{\Gamma_{n\mathbf{k}}}
 $$
 
 The figure below maps the calculated linewidth onto the electronic band structure, making it possible to identify regions in reciprocal space where electron–phonon scattering is particularly strong. States close to the Fermi level are particularly relevant for low-energy electronic scattering processes.
