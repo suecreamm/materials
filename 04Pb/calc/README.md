@@ -37,15 +37,15 @@ The figure below shows the momentum- and mode-resolved variation of these quanti
 
 The Eliashberg spectral function, $\alpha^2F(\omega)$, provides a frequency-resolved measure of the electron–phonon interaction by weighting the phonon density of states with the corresponding coupling matrix elements. Its integral determines the dimensionless electron–phonon coupling constant,
 
-\[
-\lambda = 2 \int_0^\infty \frac{\alpha^2F(\omega)}{\omega}\,d\omega .
-\]
+$$
+\lambda = 2 \int_0^\infty \frac{\alpha^2F(\omega)}{\omega}\, d\omega
+$$
 
 For fcc Pb, the present calculation gives
 
-\[
-\lambda = 0.686.
-\]
+$$
+\lambda = 0.686
+$$
 
 The spectral shape of $\alpha^2F(\omega)$ shows which phonon modes contribute most strongly to the total electron–phonon coupling, while $\lambda$ provides a compact measure of the overall interaction strength.
 
@@ -59,15 +59,15 @@ The spectral shape of $\alpha^2F(\omega)$ shows which phonon modes contribute mo
 
 The electron self-energy provides a momentum- and band-resolved description of electron–phonon scattering. The imaginary part of the self-energy determines the quasiparticle linewidth,
 
-\[
+$$
 \Gamma_{n\mathbf{k}} = 2\,\mathrm{Im}\Sigma_{n\mathbf{k}},
-\]
+$$
 
 which is directly related to the finite quasiparticle lifetime,
 
-\[
-\tau_{n\mathbf{k}} = \frac{\hbar}{\Gamma_{n\mathbf{k}}}.
-\]
+$$
+\tau_{n\mathbf{k}} = \frac{\hbar}{\Gamma_{n\mathbf{k}}}
+$$
 
 The figure below maps the calculated linewidth onto the electronic band structure, making it possible to identify regions in reciprocal space where electron–phonon scattering is particularly strong. States close to the Fermi level are particularly relevant for low-energy electronic scattering processes.
 
