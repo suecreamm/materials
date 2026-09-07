@@ -27,7 +27,7 @@ This repository presents a compact first-principles EPW workflow for fcc Pb, inc
 
 ## Phonon Linewidth & Electron–Phonon Coupling
 
-The phonon linewidth reflects the decay rate of a phonon mode due to electron–phonon scattering, while the mode-resolved coupling parameter, $\lambda_{\mathbf{q}\nu}$, quantifies the contribution of each phonon mode to the total electron–phonon interaction. Together, they provide a reciprocal-space-resolved view of how strongly different phonon branches couple to the electronic states.
+The phonon linewidth reflects the decay rate of a phonon mode due to electron–phonon scattering, while the mode-resolved coupling parameter, $\lambda_{\mathbf{q}\nu}$, quantifies the contribution of each phonon mode to the total electron–phonon interaction. Together, they provide how strongly different phonon branches couple to the electronic states across reciprocal space.
 
 The figure below shows the momentum- and mode-resolved variation of these quantities across the Brillouin zone.
 
