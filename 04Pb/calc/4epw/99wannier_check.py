@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wannier_plot_check.py
+99wannier_plot_check.py
 
 Band comparison (QE DFT vs Wannier90 MLWF) + PDOS/DOS panel.
 
@@ -28,8 +28,8 @@ High-symmetry labels:
 - Use KDIST (3rd column), normalized to [0,1], to place ticks/vertical lines.
 
 Usage:
-  python wannier_plot_check.py band.dat graphene_band.dat
-  python wannier_plot_check.py band.dat band.eig --epw
+  python 99wannier_plot_check.py ../99band/band.dat graphene_band.dat
+  python 99wannier_plot_check.py band.dat band.eig --epw
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Sequence
 
 import matplotlib
 matplotlib.use("Agg")
@@ -609,34 +609,109 @@ def report_corner_positions(
 
 
 # ============================================================
-# 3) Ef parsing & search
+# 3) Ef parsing & search (same discovery strategy as qebands.py)
 # ============================================================
 
-_FERMI_RE = re.compile(
-    r"the\s+Fermi\s+energy\s+is\s+([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)\s*ev",
-    re.IGNORECASE,
-)
-
-def parse_fermi_from_qe_out(path: str) -> Optional[float]:
+def read_text(path: Path) -> str:
     try:
-        ef: Optional[float] = None
-        with open(path, "r", errors="ignore") as f:
-            for line in f:
-                m = _FERMI_RE.search(line)
-                if m:
-                    ef = float(m.group(1))
-        return ef
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text()
+
+
+def _grep_first_float(pattern: re.Pattern, text: str) -> Optional[float]:
+    m = pattern.search(text)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
     except Exception:
         return None
 
-def find_qe_out_for_fermi(cwd: str = ".") -> Optional[str]:
-    for pat in ("*nscf*.out", "*scf*.out"):
-        cands = sorted(glob.glob(str(Path(cwd) / pat)))
-        if cands:
-            return cands[0]
+
+class OutputCase:
+    name: str = "base"
+    def match(self, path: Path) -> bool: return False
+    def extract(self, text: str) -> Optional[float]: return None
+
+
+class CasePwLikeEF(OutputCase):
+    """QE pw.x/dos.x/projwfc.x style Fermi-energy parser."""
+    name = "pw/dos/projwfc:EF"
+    PAT = re.compile(r"the\s+Fermi\s+energy\s+is\s+([\-+]?\d+(?:\.\d+)?)\s*eV", re.IGNORECASE)
+
+    def match(self, path: Path) -> bool:
+        s = path.name.lower()
+        return any(k in s for k in ("scf.out", "nscf.out", "dos.out", "projwfc", ".out"))
+
+    def extract(self, text: str) -> Optional[float]:
+        return _grep_first_float(self.PAT, text)
+
+
+CASES_EF: List[OutputCase] = [CasePwLikeEF()]
+
+
+def _derive_base_prefix_from_band_file(band_file: Path) -> str:
+    name = band_file.name
+    for suffix in (".dat.gnu", ".gnu", ".dat", ".eig"):
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+            break
+    name = re.sub(r"(_\d*bands?)$", "", name, flags=re.IGNORECASE)
+    return name
+
+
+def discover_fermi_energy(
+    search_dir: Path,
+    basename_hint: Optional[str] = None,
+    prefer_order: Sequence[str] = ("nscf", "scf", "dos", "projwfc", "out"),
+) -> Tuple[Optional[float], Optional[Path]]:
+    """Discover EF exactly as in qebands.py: basename match first, then nscf->scf->dos->projwfc->out."""
+    all_outs = sorted(search_dir.glob("*.out"))
+    if not all_outs:
+        return None, None
+
+    def order_key(path: Path) -> Tuple[int, int]:
+        ln = path.name.lower()
+        tier = 0 if (basename_hint and ln.startswith(basename_hint.lower())) else 1
+        pr = 999
+        for i, key in enumerate(prefer_order):
+            if key in ln:
+                pr = i
+                break
+        return tier, pr
+
+    candidates = sorted(all_outs, key=lambda path: (*order_key(path), path.name.lower()))
+    for path in candidates:
+        txt = read_text(path)
+        for case in CASES_EF:
+            if case.match(path):
+                ef = case.extract(txt)
+                if ef is not None:
+                    return ef, path
+    return None, None
+
+
+def parse_fermi_from_qe_out(path: str) -> Optional[float]:
+    p = Path(path)
+    txt = read_text(p)
+    for case in CASES_EF:
+        if case.match(p):
+            return case.extract(txt)
     return None
 
-def resolve_ef(no_fermi_search: bool, fermi_from: Optional[str], set_fermi: Optional[float]) -> Tuple[Optional[float], str]:
+
+def find_qe_out_for_fermi(cwd: str = ".", basename_hint: Optional[str] = None) -> Optional[str]:
+    _, path = discover_fermi_energy(Path(cwd), basename_hint=basename_hint)
+    return str(path) if path is not None else None
+
+
+def resolve_ef(
+    no_fermi_search: bool,
+    fermi_from: Optional[str],
+    set_fermi: Optional[float],
+    band_file: Optional[str] = None,
+) -> Tuple[Optional[float], str]:
     if set_fermi is not None:
         return float(set_fermi), "manual(--set-fermi)"
     if fermi_from is not None:
@@ -646,13 +721,13 @@ def resolve_ef(no_fermi_search: bool, fermi_from: Optional[str], set_fermi: Opti
         return ef, f"fermi-from({Path(fermi_from).name})"
     if no_fermi_search:
         return None, "disabled(--no-fermi-search)"
-    outp = find_qe_out_for_fermi(".")
-    if outp is None:
-        return None, "auto(no scf/nscf out found)"
-    ef = parse_fermi_from_qe_out(outp)
-    if ef is None:
-        return None, f"auto({Path(outp).name}, no-match)"
-    return ef, f"auto({Path(outp).name})"
+
+    band_path = Path(band_file) if band_file is not None else Path("band.dat")
+    base_prefix = _derive_base_prefix_from_band_file(band_path)
+    ef, src = discover_fermi_energy(band_path.parent if str(band_path.parent) else Path("."), basename_hint=base_prefix)
+    if ef is None or src is None:
+        return None, "auto(no QE output with Fermi energy found)"
+    return ef, f"auto({src.name})"
 
 
 # ============================================================
@@ -843,7 +918,7 @@ def plot_bands_and_pdos(
     dft_file: str,
     wann_file: str,
     outpng: str,
-    ylim: Tuple[float, float],
+    yrange: Tuple[float, float],
     ef: Optional[float],
     ef_src: str,
     align_fermi: bool,
@@ -1035,7 +1110,7 @@ def plot_bands_and_pdos(
                 print(f"[debug] labelinfo file not found: {labelinfo_file}")
 
     ax_band.set_xlim(0.0, 1.0)
-    ax_band.set_ylim(ylim[0], ylim[1])
+    ax_band.set_ylim(yrange[0], yrange[1])
     ax_band.set_xlabel("Normalized Path", fontsize=label_fontsize)
     ax_band.set_ylabel("Energy (eV)", fontsize=label_fontsize)
     ax_band.grid(True, linestyle=":", alpha=0.6)
@@ -1112,11 +1187,12 @@ def main(argv: List[str]) -> int:
     p.add_argument("dft_band_file")
     p.add_argument("wann_band_file")
     p.add_argument("--out", default="band_comparison.png")
-    p.add_argument("--ylim", nargs=2, type=float, default=[-3, 3])
+    p.add_argument("--yrange", nargs=2, type=float, default=[-3, 3], metavar=("YMIN", "YMAX"))
     p.add_argument("--no-fermi-search", action="store_true")
-    p.add_argument("--fermi-from", default=None)
+    p.add_argument("--fermi-from", "--ef-source", dest="fermi_from", default=None)
     p.add_argument("--set-fermi", type=float, default=None)
-    p.add_argument("--no-align-fermi", action="store_true")
+    p.add_argument("--no-align-fermi", "--no-shift-by-ef", dest="no_align_fermi", action="store_true",
+                   help="Do not shift energies by EF. By default EF is auto-detected and shifted to 0 eV.")
     p.add_argument("--wannier-fermi", type=float, default=None)
     p.add_argument("--epw", action="store_true",
                    help="Treat the second band file as EPW band.eig (&plot format) instead of Wannier90 2-column data.")
@@ -1137,18 +1213,22 @@ def main(argv: List[str]) -> int:
         cand = Path(f"{Path(stem).stem}.labelinfo.dat")
         labelinfo_file = str(cand) if cand.is_file() else None
 
-    ef, ef_src = resolve_ef(args.no_fermi_search, args.fermi_from, args.set_fermi)
+    ef, ef_src = resolve_ef(args.no_fermi_search, args.fermi_from, args.set_fermi, args.dft_band_file)
     align_fermi = (not args.no_align_fermi)
+    if align_fermi and ef is not None:
+        print(f"[INFO] Applied EF shift: E -> E - {ef:.6f} eV ({ef_src}); Fermi level = 0 eV")
+    elif align_fermi and ef is None:
+        print("[WARN] Fermi energy was not found; energies are plotted without EF shift.")
 
     cell_file = args.cell_from
     if cell_file is None:
-        cell_file = args.fermi_from if args.fermi_from is not None else find_qe_out_for_fermi(".")
+        cell_file = args.fermi_from if args.fermi_from is not None else find_qe_out_for_fermi(".", _derive_base_prefix_from_band_file(Path(args.dft_band_file)))
 
     plot_bands_and_pdos(
         dft_file=args.dft_band_file,
         wann_file=args.wann_band_file,
         outpng=args.out,
-        ylim=(args.ylim[0], args.ylim[1]),
+        yrange=(args.yrange[0], args.yrange[1]),
         ef=ef,
         ef_src=ef_src,
         align_fermi=align_fermi,
@@ -1165,3 +1245,4 @@ def main(argv: List[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
+
