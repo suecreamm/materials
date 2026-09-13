@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wannier_plot_check.py
+99wannier_plot_check.py
 
 Band comparison (QE DFT vs Wannier90 MLWF) + PDOS/DOS panel.
 
@@ -28,7 +28,8 @@ High-symmetry labels:
 - Use KDIST (3rd column), normalized to [0,1], to place ticks/vertical lines.
 
 Usage:
-  python wannier_plot_check.py band.dat graphene_band.dat
+  python 99wannier_plot_check.py band.dat graphene_band.dat
+  python 99wannier_plot_check.py band.dat band.eig --epw
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Sequence
 
 import matplotlib
 matplotlib.use("Agg")
@@ -114,6 +115,7 @@ class LabelInfo:
     label: str
     idx_1based: int
     kdist: float
+    kfrac: Optional[np.ndarray] = None
 
 
 def read_labelinfo_file(labelinfo_path: str, debug: bool = False) -> List[LabelInfo]:
@@ -141,7 +143,14 @@ def read_labelinfo_file(labelinfo_path: str, debug: bool = False) -> List[LabelI
             except ValueError:
                 continue
 
-            out.append(LabelInfo(label=lab, idx_1based=idx, kdist=kd))
+            kf: Optional[np.ndarray] = None
+            if len(parts) >= 6:
+                try:
+                    kf = np.array([float(parts[3]), float(parts[4]), float(parts[5])], dtype=float)
+                except ValueError:
+                    kf = None
+
+            out.append(LabelInfo(label=lab, idx_1based=idx, kdist=kd, kfrac=kf))
 
     return out
 
@@ -211,6 +220,104 @@ def parse_wannier_2col_blocks(filename: str) -> Tuple[List[np.ndarray], List[np.
     return x_blocks, y_blocks
 
 
+def parse_epw_band_eig(filename: str) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    """
+    Parse EPW band.eig (QE/plotband-compatible '&plot' format) and return
+    band-by-band x/y blocks, matching the interface used for Wannier90 data.
+    """
+    kpts, E = parse_qe_plot_format(filename)
+    x = normalize_01(kdist_cumulative_raw(kpts))
+    x_blocks = [x.copy() for _ in range(E.shape[0])]
+    y_blocks = [E[ib, :].copy() for ib in range(E.shape[0])]
+    return x_blocks, y_blocks
+
+
+
+def detect_path_boundaries(
+    kpts: np.ndarray,
+    angle_tol: float = 1.0e-3,
+    min_step: float = 1.0e-10,
+) -> List[int]:
+    """
+    Detect high-symmetry path boundaries from changes in direction of the
+    k-point sequence.  This uses only collinearity in the supplied coordinate
+    representation, so it does not assume an orthogonal reciprocal basis.
+
+    'angle_tol' is a threshold on sin(angle) between consecutive steps.  It must
+    stay well above the round-off level of the printed k-coordinates (band.dat
+    and band.eig carry ~6 decimals), otherwise every point looks like a corner.
+
+    Returns 0-based point indices including the first and last point.
+    """
+    n = kpts.shape[0]
+    if n <= 1:
+        return [0]
+
+    boundaries = [0]
+    prev_dir: Optional[np.ndarray] = None
+
+    for i in range(n - 1):
+        step = kpts[i + 1] - kpts[i]
+        norm = float(np.linalg.norm(step))
+        if norm <= min_step:
+            # A repeated k-point marks an explicit break in the path.
+            if boundaries[-1] != i:
+                boundaries.append(i)
+            prev_dir = None
+            continue
+        cur_dir = step / norm
+
+        if prev_dir is not None:
+            # A segment boundary is where two consecutive non-zero steps are
+            # no longer collinear (parallel or antiparallel).
+            cross_norm = float(np.linalg.norm(np.cross(prev_dir, cur_dir)))
+            dot = float(np.dot(prev_dir, cur_dir))
+            if cross_norm > angle_tol or dot < 0.0:
+                if boundaries[-1] != i:
+                    boundaries.append(i)
+        prev_dir = cur_dir
+
+    if boundaries[-1] != n - 1:
+        boundaries.append(n - 1)
+    return boundaries
+
+
+def piecewise_common_x(
+    kpts: np.ndarray,
+    boundaries: List[int],
+    anchors: np.ndarray,
+) -> np.ndarray:
+    """
+    Map each path segment onto common anchor positions.  Distances are only
+    used *inside* a straight segment; the high-symmetry endpoints themselves
+    are fixed by anchors.  This is useful when QE and EPW express equivalent
+    k-points in different reciprocal-coordinate conventions.
+    """
+    if len(boundaries) != len(anchors):
+        raise ValueError("Number of path boundaries and anchor positions differ.")
+
+    x = np.zeros(kpts.shape[0], dtype=float)
+
+    for iseg in range(len(boundaries) - 1):
+        i0 = boundaries[iseg]
+        i1 = boundaries[iseg + 1]
+        if i1 <= i0:
+            continue
+
+        seg = kpts[i0:i1 + 1]
+        local = kdist_cumulative_raw(seg)
+        if local[-1] > 0.0:
+            local = local / local[-1]
+        else:
+            local = np.linspace(0.0, 1.0, len(seg))
+
+        xa = float(anchors[iseg])
+        xb = float(anchors[iseg + 1])
+        x[i0:i1 + 1] = xa + (xb - xa) * local
+
+    return x
+
+
 def normalize_wannier_x_blocks(x_blocks: List[np.ndarray]) -> List[np.ndarray]:
     if not x_blocks:
         return x_blocks
@@ -224,34 +331,387 @@ def normalize_wannier_x_blocks(x_blocks: List[np.ndarray]) -> List[np.ndarray]:
 
 
 # ============================================================
-# 3) Ef parsing & search
+# 2.5) k-coordinate convention handling
 # ============================================================
 
-_FERMI_RE = re.compile(
-    r"the\s+Fermi\s+energy\s+is\s+([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)\s*ev",
-    re.IGNORECASE,
+_B_VEC_RE = re.compile(
+    r"b\(([123])\)\s*=\s*\(\s*"
+    r"([-+]?\d*\.?\d+(?:[EeDd][-+]?\d+)?)\s+"
+    r"([-+]?\d*\.?\d+(?:[EeDd][-+]?\d+)?)\s+"
+    r"([-+]?\d*\.?\d+(?:[EeDd][-+]?\d+)?)\s*\)"
 )
 
-def parse_fermi_from_qe_out(path: str) -> Optional[float]:
+
+def parse_reciprocal_axes(path: Optional[str]) -> Optional[np.ndarray]:
+    """
+    Read b(1), b(2), b(3) (cart. coord. in units 2 pi/alat) from a QE output.
+    Returns a 3x3 array whose ROWS are b1, b2, b3, or None.
+    """
+    if path is None:
+        return None
     try:
-        ef: Optional[float] = None
+        rows: Dict[int, List[float]] = {}
         with open(path, "r", errors="ignore") as f:
             for line in f:
-                m = _FERMI_RE.search(line)
+                m = _B_VEC_RE.search(line)
                 if m:
-                    ef = float(m.group(1))
-        return ef
+                    i = int(m.group(1))
+                    if i not in rows:
+                        rows[i] = [
+                            float(m.group(2).replace("D", "E").replace("d", "e")),
+                            float(m.group(3).replace("D", "E").replace("d", "e")),
+                            float(m.group(4).replace("D", "E").replace("d", "e")),
+                        ]
+        if len(rows) != 3:
+            return None
+        return np.array([rows[1], rows[2], rows[3]], dtype=float)
     except Exception:
         return None
 
-def find_qe_out_for_fermi(cwd: str = ".") -> Optional[str]:
-    for pat in ("*nscf*.out", "*scf*.out"):
-        cands = sorted(glob.glob(str(Path(cwd) / pat)))
-        if cands:
-            return cands[0]
+
+def label_index_mismatch(kpts: np.ndarray, labels: List[LabelInfo]) -> Optional[float]:
+    """
+    labelinfo.dat carries both the point INDEX along the band k-path and the
+    physical path length KDIST (1/Ang) of each high-symmetry point.  If a given
+    k-coordinate representation is the metrically correct one, then the
+    normalized cumulative |dk| evaluated at those indices must reproduce the
+    normalized KDIST.  Return the maximum deviation, or None if not evaluable.
+    """
+    if not labels:
+        return None
+    n = kpts.shape[0]
+    idx = np.array([li.idx_1based - 1 for li in labels], dtype=int)
+    if idx.size < 2 or int(idx.min()) < 0 or int(idx.max()) >= n:
+        return None
+
+    kds = np.array([li.kdist for li in labels], dtype=float)
+    if float(np.nanmax(kds)) == float(np.nanmin(kds)):
+        return None
+
+    tgt = normalize_01(kds)
+    x = normalize_01(kdist_cumulative_nobreak(kpts, detect_path_breaks(kpts)))
+    return float(np.nanmax(np.abs(x[idx] - tgt)))
+
+
+def choose_kpts_convention(
+    kpts: np.ndarray,
+    labels: List[LabelInfo],
+    B: Optional[np.ndarray],
+    tag: str = "EPW",
+    debug: bool = False,
+) -> Tuple[np.ndarray, str, Optional[float]]:
+    """
+    Pick between 'k as given' and 'k treated as crystal coordinates and
+    converted to cartesian 2 pi/alat', using labelinfo.dat as the referee.
+    """
+    cands: List[Tuple[str, np.ndarray]] = [("as-given (cartesian 2pi/alat)", kpts)]
+    if B is not None:
+        cands.append(("crystal -> cartesian 2pi/alat", kpts @ B))
+
+    scored: List[Tuple[str, np.ndarray, Optional[float]]] = []
+    for name, kk in cands:
+        s = label_index_mismatch(kk, labels)
+        scored.append((name, kk, s))
+        if debug:
+            if s is None:
+                print(f"[debug] {tag} k-convention '{name}': not evaluable against labelinfo")
+            else:
+                print(f"[debug] {tag} k-convention '{name}': max label mismatch = {s:.3e}")
+
+    usable = [t for t in scored if t[2] is not None]
+    if not usable:
+        return scored[0][1], scored[0][0], None
+
+    name, kk, s = min(usable, key=lambda t: t[2])
+    return kk, name, s
+
+
+def detect_path_breaks(kpts: np.ndarray, factor: float = 3.0) -> List[int]:
+    """
+    Locate discontinuities in a band k-path, i.e. steps that are far longer
+    than the sampling step of the path.  A k-path such as G-X | X-W jumps
+    between two symmetry-equivalent images of X; that jump carries no band
+    dispersion and must not enter the path length, otherwise everything after
+    it is pushed along the normalized axis.
+
+    Returns the 0-based indices of the offending *steps* (between point i and
+    point i+1).
+    """
+    if kpts.shape[0] < 3:
+        return []
+    dk = np.linalg.norm(np.diff(kpts, axis=0), axis=1)
+    pos = dk[dk > 0.0]
+    if pos.size == 0:
+        return []
+    med = float(np.median(pos))
+    if med <= 0.0:
+        return []
+    return [int(i) for i in np.where(dk > factor * med)[0]]
+
+
+def kdist_cumulative_nobreak(kpts: np.ndarray, breaks: Optional[List[int]] = None) -> np.ndarray:
+    """Cumulative |dk| with the listed steps counted as zero length."""
+    if kpts.shape[0] <= 1:
+        return np.zeros(kpts.shape[0], dtype=float)
+    dk = np.linalg.norm(np.diff(kpts, axis=0), axis=1)
+    if breaks:
+        dk[np.array(breaks, dtype=int)] = 0.0
+    return np.concatenate([[0.0], np.cumsum(dk)])
+
+
+def labels_to_cart(labels: List[LabelInfo], B: Optional[np.ndarray]) -> Optional[np.ndarray]:
+    """High-symmetry points of labelinfo.dat in cartesian 2 pi/alat."""
+    if (not labels) or (B is None):
+        return None
+    if any(li.kfrac is None for li in labels):
+        return None
+    frac = np.array([li.kfrac for li in labels], dtype=float)
+    return frac @ B
+
+
+def pick_epw_conversion_by_labels(
+    kpts: np.ndarray,
+    labels: List[LabelInfo],
+    lab_cart: np.ndarray,
+    B: Optional[np.ndarray],
+    tol: float = 1.0e-3,
+    debug: bool = False,
+) -> Tuple[Optional[np.ndarray], str, Optional[float]]:
+    """
+    labelinfo.dat gives the index of every high-symmetry point along the band
+    k-path, so the k-coordinate convention of band.eig can be read off simply
+    by comparing the k-points sitting at those indices with the crystal and
+    cartesian coordinates of the labels.
+    """
+    n = kpts.shape[0]
+    idx = np.array([li.idx_1based - 1 for li in labels], dtype=int)
+    if idx.size < 2 or int(idx.min()) < 0 or int(idx.max()) >= n:
+        if debug:
+            print(f"[debug] labelinfo indices out of range for nks={n}")
+        return None, "", None
+
+    kk = kpts[idx]
+    lab_frac = np.array([li.kfrac for li in labels], dtype=float)
+    e_cart = float(np.max(np.abs(kk - lab_cart)))
+    e_frac = float(np.max(np.abs(kk - lab_frac)))
+    if debug:
+        print(f"[debug] EPW k at label indices vs cartesian labels: max dev = {e_cart:.3e}")
+        print(f"[debug] EPW k at label indices vs crystal   labels: max dev = {e_frac:.3e}")
+
+    if min(e_cart, e_frac) > tol:
+        return None, "", None
+    if e_cart <= e_frac:
+        return kpts, "as-given (cartesian 2pi/alat)", e_cart
+    if B is None:
+        return None, "", None
+    return kpts @ B, "crystal -> cartesian 2pi/alat", e_frac
+
+
+def match_labels_in_path(
+    kpts: np.ndarray,
+    lab_cart: np.ndarray,
+    B: Optional[np.ndarray] = None,
+    tol: float = 1.0e-4,
+    debug: bool = False,
+    tag: str = "DFT",
+) -> Optional[List[int]]:
+    """
+    Locate the high-symmetry points inside a k-point list, scanning forward so
+    that a repeated point (G at the start and in the middle) is matched in path
+    order.  If an exact match fails, points differing by a reciprocal lattice
+    vector are accepted as a fallback.
+    """
+    idxs: List[int] = []
+    start = 0
+    Binv = np.linalg.inv(B) if B is not None else None
+
+    for i, kl in enumerate(lab_cart):
+        sub = kpts[start:]
+        if sub.shape[0] == 0:
+            return None
+        d = np.linalg.norm(sub - kl, axis=1)
+        j = int(np.argmin(d))
+        if float(d[j]) > tol:
+            if Binv is None:
+                if debug:
+                    print(f"[debug] {tag}: no k-point matches label #{i+1} (min dev {float(d[j]):.3e})")
+                return None
+            frac = (sub - kl) @ Binv
+            r = np.max(np.abs(frac - np.round(frac)), axis=1)
+            j = int(np.argmin(r))
+            if float(r[j]) > 1.0e-3:
+                if debug:
+                    print(f"[debug] {tag}: no k-point matches label #{i+1} "
+                          f"(min dev {float(d[j]):.3e}, min dev mod G {float(r[j]):.3e})")
+                return None
+        idxs.append(j + start)
+        start = j + start
+
+    return idxs
+
+
+def report_path_geometry(
+    kpts: np.ndarray,
+    labels: List[LabelInfo],
+    lab_cart: Optional[np.ndarray],
+    tag: str = "DFT",
+) -> None:
+    """
+    Debug helper for the case where a dataset cannot be matched to
+    labelinfo.dat: print both vertex lists so a genuinely different k-path is
+    visible at a glance.
+    """
+    bounds = detect_path_boundaries(kpts)
+    print(f"[debug] {tag} path vertices (cartesian 2pi/alat), {len(bounds)-1} segments:")
+    for a, b in zip(bounds, bounds[1:]):
+        ka, kb = kpts[a], kpts[b]
+        seg = float(np.linalg.norm(kb - ka))
+        print(f"[debug]   ({ka[0]:7.4f} {ka[1]:7.4f} {ka[2]:7.4f}) -> "
+              f"({kb[0]:7.4f} {kb[1]:7.4f} {kb[2]:7.4f})  |dk| = {seg:.4f}")
+
+    if lab_cart is None or not labels:
+        return
+    print(f"[debug] labelinfo path vertices (cartesian 2pi/alat), {len(labels)-1} segments:")
+    for i in range(len(labels) - 1):
+        ka, kb = lab_cart[i], lab_cart[i + 1]
+        seg = float(np.linalg.norm(kb - ka))
+        dkd = labels[i + 1].kdist - labels[i].kdist
+        print(f"[debug]   {labels[i].label:>2s} ({ka[0]:7.4f} {ka[1]:7.4f} {ka[2]:7.4f}) -> "
+              f"{labels[i+1].label:>2s} ({kb[0]:7.4f} {kb[1]:7.4f} {kb[2]:7.4f})  "
+              f"|dk| = {seg:.4f}, dKDIST = {dkd:.4f}")
+
+
+
+def report_corner_positions(
+    kpts: np.ndarray,
+    labels: List[LabelInfo],
+    tag: str = "DFT",
+) -> None:
+    """
+    Debug helper: where the geometric corners of a path sit on the normalized
+    x axis, next to the label positions implied by labelinfo KDIST.
+    """
+    bounds = detect_path_boundaries(kpts)
+    x = normalize_01(kdist_cumulative_nobreak(kpts, detect_path_breaks(kpts)))
+    xs = [float(x[i]) for i in bounds]
+    print(f"[debug] {tag} detected corners (0-based idx -> x): "
+          + ", ".join(f"{i}->{v:.6f}" for i, v in zip(bounds, xs)))
+    if labels:
+        tgt = normalize_01(np.array([li.kdist for li in labels], dtype=float))
+        print("[debug] labelinfo positions: "
+              + ", ".join(f"{li.label}->{t:.6f}" for li, t in zip(labels, tgt)))
+        if len(tgt) == len(xs):
+            dev = float(np.nanmax(np.abs(np.array(xs) - tgt)))
+            print(f"[debug] {tag} corner-vs-label max deviation = {dev:.3e}")
+        else:
+            print(f"[debug] {tag} corner count {len(xs)} != label count {len(tgt)} "
+                  "(path definitions may differ, or corners are unresolved)")
+
+
+# ============================================================
+# 3) Ef parsing & search (same discovery strategy as qebands.py)
+# ============================================================
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text()
+
+
+def _grep_first_float(pattern: re.Pattern, text: str) -> Optional[float]:
+    m = pattern.search(text)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except Exception:
+        return None
+
+
+class OutputCase:
+    name: str = "base"
+    def match(self, path: Path) -> bool: return False
+    def extract(self, text: str) -> Optional[float]: return None
+
+
+class CasePwLikeEF(OutputCase):
+    """QE pw.x/dos.x/projwfc.x style Fermi-energy parser."""
+    name = "pw/dos/projwfc:EF"
+    PAT = re.compile(r"the\s+Fermi\s+energy\s+is\s+([\-+]?\d+(?:\.\d+)?)\s*eV", re.IGNORECASE)
+
+    def match(self, path: Path) -> bool:
+        s = path.name.lower()
+        return any(k in s for k in ("scf.out", "nscf.out", "dos.out", "projwfc", ".out"))
+
+    def extract(self, text: str) -> Optional[float]:
+        return _grep_first_float(self.PAT, text)
+
+
+CASES_EF: List[OutputCase] = [CasePwLikeEF()]
+
+
+def _derive_base_prefix_from_band_file(band_file: Path) -> str:
+    name = band_file.name
+    for suffix in (".dat.gnu", ".gnu", ".dat", ".eig"):
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+            break
+    name = re.sub(r"(_\d*bands?)$", "", name, flags=re.IGNORECASE)
+    return name
+
+
+def discover_fermi_energy(
+    search_dir: Path,
+    basename_hint: Optional[str] = None,
+    prefer_order: Sequence[str] = ("nscf", "scf", "dos", "projwfc", "out"),
+) -> Tuple[Optional[float], Optional[Path]]:
+    """Discover EF exactly as in qebands.py: basename match first, then nscf->scf->dos->projwfc->out."""
+    all_outs = sorted(search_dir.glob("*.out"))
+    if not all_outs:
+        return None, None
+
+    def order_key(path: Path) -> Tuple[int, int]:
+        ln = path.name.lower()
+        tier = 0 if (basename_hint and ln.startswith(basename_hint.lower())) else 1
+        pr = 999
+        for i, key in enumerate(prefer_order):
+            if key in ln:
+                pr = i
+                break
+        return tier, pr
+
+    candidates = sorted(all_outs, key=lambda path: (*order_key(path), path.name.lower()))
+    for path in candidates:
+        txt = read_text(path)
+        for case in CASES_EF:
+            if case.match(path):
+                ef = case.extract(txt)
+                if ef is not None:
+                    return ef, path
+    return None, None
+
+
+def parse_fermi_from_qe_out(path: str) -> Optional[float]:
+    p = Path(path)
+    txt = read_text(p)
+    for case in CASES_EF:
+        if case.match(p):
+            return case.extract(txt)
     return None
 
-def resolve_ef(no_fermi_search: bool, fermi_from: Optional[str], set_fermi: Optional[float]) -> Tuple[Optional[float], str]:
+
+def find_qe_out_for_fermi(cwd: str = ".", basename_hint: Optional[str] = None) -> Optional[str]:
+    _, path = discover_fermi_energy(Path(cwd), basename_hint=basename_hint)
+    return str(path) if path is not None else None
+
+
+def resolve_ef(
+    no_fermi_search: bool,
+    fermi_from: Optional[str],
+    set_fermi: Optional[float],
+    band_file: Optional[str] = None,
+) -> Tuple[Optional[float], str]:
     if set_fermi is not None:
         return float(set_fermi), "manual(--set-fermi)"
     if fermi_from is not None:
@@ -261,13 +721,13 @@ def resolve_ef(no_fermi_search: bool, fermi_from: Optional[str], set_fermi: Opti
         return ef, f"fermi-from({Path(fermi_from).name})"
     if no_fermi_search:
         return None, "disabled(--no-fermi-search)"
-    outp = find_qe_out_for_fermi(".")
-    if outp is None:
-        return None, "auto(no scf/nscf out found)"
-    ef = parse_fermi_from_qe_out(outp)
-    if ef is None:
-        return None, f"auto({Path(outp).name}, no-match)"
-    return ef, f"auto({Path(outp).name})"
+
+    band_path = Path(band_file) if band_file is not None else Path("band.dat")
+    base_prefix = _derive_base_prefix_from_band_file(band_path)
+    ef, src = discover_fermi_energy(band_path.parent if str(band_path.parent) else Path("."), basename_hint=base_prefix)
+    if ef is None or src is None:
+        return None, "auto(no QE output with Fermi energy found)"
+    return ef, f"auto({src.name})"
 
 
 # ============================================================
@@ -458,7 +918,7 @@ def plot_bands_and_pdos(
     dft_file: str,
     wann_file: str,
     outpng: str,
-    ylim: Tuple[float, float],
+    yrange: Tuple[float, float],
     ef: Optional[float],
     ef_src: str,
     align_fermi: bool,
@@ -467,14 +927,119 @@ def plot_bands_and_pdos(
     debug: bool = False,
     label_fontsize: int = 16,
     tick_fontsize: int = 14,
+    epw_mode: bool = False,
+    cell_file: Optional[str] = None,
 ) -> None:
 
     # ----- bands -----
     kpts, dft_E = parse_qe_plot_format(dft_file)
     dft_x = normalize_01(kdist_cumulative_raw(kpts))
 
-    wx_blocks, wy_blocks = parse_wannier_2col_blocks(wann_file)
-    wx_blocks = normalize_wannier_x_blocks(wx_blocks)
+    epw_tick_xs: Optional[List[float]] = None
+
+    if epw_mode:
+        epw_kpts_raw, epw_E = parse_qe_plot_format(wann_file)
+
+        labels_for_x: List[LabelInfo] = []
+        if labelinfo_file is not None and Path(labelinfo_file).is_file():
+            labels_for_x = read_labelinfo_file(labelinfo_file)
+
+        B = parse_reciprocal_axes(cell_file)
+        if debug:
+            if B is None:
+                print(f"[debug] reciprocal axes b(1..3) not found (cell file: {cell_file}); "
+                      "crystal->cartesian conversion unavailable")
+            else:
+                print(f"[debug] reciprocal axes from {cell_file} (2 pi/alat):")
+                for i in range(3):
+                    print(f"[debug]   b({i+1}) = "
+                          f"({B[i, 0]:.6f} {B[i, 1]:.6f} {B[i, 2]:.6f})")
+            print(f"[debug] nks: DFT={kpts.shape[0]}, EPW={epw_kpts_raw.shape[0]}, "
+                  f"labels={len(labels_for_x)}")
+
+        lab_cart = labels_to_cart(labels_for_x, B)
+        anchored = False
+
+        # Preferred route: labelinfo.dat pins both datasets to the same axis.
+        # It carries the index and the physical path length KDIST of every
+        # high-symmetry point, so each dataset can be mapped segment by segment
+        # onto the normalized KDIST.  This is immune both to a different
+        # k-coordinate convention and to path discontinuities (G-X | X-W),
+        # whose jump would otherwise be counted as real path length.
+        if lab_cart is not None:
+            epw_kpts, epw_conv, epw_dev = pick_epw_conversion_by_labels(
+                epw_kpts_raw, labels_for_x, lab_cart, B, debug=debug
+            )
+            epw_idx = [li.idx_1based - 1 for li in labels_for_x]
+            dft_idx = match_labels_in_path(kpts, lab_cart, B, debug=debug, tag="DFT")
+
+            ok_epw = (epw_kpts is not None
+                      and epw_idx[0] == 0
+                      and epw_idx[-1] == epw_kpts.shape[0] - 1
+                      and all(b >= a for a, b in zip(epw_idx, epw_idx[1:])))
+            ok_dft = (dft_idx is not None
+                      and dft_idx[0] == 0
+                      and dft_idx[-1] == kpts.shape[0] - 1)
+
+            if debug:
+                if epw_kpts is not None:
+                    print(f"[debug] EPW k-convention: {epw_conv} (max dev {epw_dev:.3e})")
+                print(f"[debug] EPW label indices (0-based): {epw_idx} -> usable={ok_epw}")
+                print(f"[debug] DFT label indices (0-based): {dft_idx} -> usable={ok_dft}")
+
+            if ok_epw and ok_dft:
+                anchors = normalize_01(np.array([li.kdist for li in labels_for_x], dtype=float))
+                dft_x = piecewise_common_x(kpts, list(dft_idx), anchors)
+                epw_x = piecewise_common_x(epw_kpts, list(epw_idx), anchors)
+                anchored = True
+                if debug:
+                    print("[debug] x axis anchored on labelinfo KDIST: "
+                          + ", ".join(f"{li.label}->{a:.6f}"
+                                      for li, a in zip(labels_for_x, anchors)))
+
+        if not anchored:
+            # Fallback: no usable labelinfo geometry.  Normalize each path by
+            # its own cumulative |dk|, but drop discontinuity jumps first.
+            epw_kpts, epw_conv, epw_score = choose_kpts_convention(
+                epw_kpts_raw, labels_for_x, B, tag="EPW", debug=debug
+            )
+            dft_breaks = detect_path_breaks(kpts)
+            epw_breaks = detect_path_breaks(epw_kpts)
+            if debug:
+                if lab_cart is not None:
+                    report_path_geometry(kpts, labels_for_x, lab_cart, tag="DFT")
+                print(f"[debug] fallback normalization; detected breaks: "
+                      f"DFT steps {dft_breaks}, EPW steps {epw_breaks}")
+            dft_x = normalize_01(kdist_cumulative_nobreak(kpts, dft_breaks))
+            epw_x = normalize_01(kdist_cumulative_nobreak(epw_kpts, epw_breaks))
+
+            if (epw_score is None) or (epw_score > 2.0e-2):
+                dft_bounds = detect_path_boundaries(kpts)
+                epw_bounds = detect_path_boundaries(epw_kpts)
+                if len(dft_bounds) == len(epw_bounds) and len(epw_bounds) >= 2:
+                    anchors = normalize_01(kdist_cumulative_nobreak(epw_kpts, epw_breaks))
+                    anchors = anchors[np.array(epw_bounds, dtype=int)]
+                    dft_x = piecewise_common_x(kpts, dft_bounds, anchors)
+                    epw_x = piecewise_common_x(epw_kpts, epw_bounds, anchors)
+                    epw_tick_xs = anchors.tolist()
+                    if debug:
+                        print(f"[debug] DFT path boundaries: {dft_bounds}")
+                        print(f"[debug] EPW path boundaries: {epw_bounds}")
+                        print(f"[debug] common x anchors: {epw_tick_xs}")
+                elif debug:
+                    print(
+                        "[debug] WARNING: DFT/EPW path segment counts differ: "
+                        f"DFT={len(dft_bounds)-1}, EPW={len(epw_bounds)-1}. "
+                        "Using independent x normalization; check the k-path input."
+                    )
+                    report_corner_positions(kpts, labels_for_x, tag="DFT")
+                    report_corner_positions(epw_kpts, labels_for_x, tag="EPW")
+
+        wx_blocks = [epw_x.copy() for _ in range(epw_E.shape[0])]
+        wy_blocks = [epw_E[ib, :].copy() for ib in range(epw_E.shape[0])]
+    else:
+        wx_blocks, wy_blocks = parse_wannier_2col_blocks(wann_file)
+        wx_blocks = normalize_wannier_x_blocks(wx_blocks)
 
     if align_fermi and (ef is not None):
         dft_E = dft_E - ef
@@ -518,7 +1083,7 @@ def plot_bands_and_pdos(
         ax_band.plot(dft_x, dft_E[b], color="0.4", linewidth=2.0, alpha=0.6, label=label)
 
     for i, (xb, yb) in enumerate(zip(wx_blocks, wy_blocks)):
-        label = "Wannier (MLWF)" if i == 0 else None
+        label = ("EPW interpolation" if epw_mode else "Wannier (MLWF)") if i == 0 else None
         ax_band.plot(xb, yb, "r--", linewidth=1.5, alpha=1.0, label=label)
 
     # ---- High-symmetry labels ----
@@ -527,6 +1092,13 @@ def plot_bands_and_pdos(
         if p.is_file():
             labels = read_labelinfo_file(str(p), debug=debug)
             xs, labs = label_x_positions_from_kdist(labels, debug=debug)
+
+            # In EPW mode, if path segmentation was detected successfully,
+            # use the common segment anchors for tick positions.  Keep the
+            # label strings from labelinfo.dat, but do not use its KDIST to
+            # define a second, inconsistent x-axis metric.
+            if epw_mode and epw_tick_xs is not None and len(labs) == len(epw_tick_xs):
+                xs = epw_tick_xs
 
             if xs:
                 for x in xs:
@@ -538,7 +1110,7 @@ def plot_bands_and_pdos(
                 print(f"[debug] labelinfo file not found: {labelinfo_file}")
 
     ax_band.set_xlim(0.0, 1.0)
-    ax_band.set_ylim(ylim[0], ylim[1])
+    ax_band.set_ylim(yrange[0], yrange[1])
     ax_band.set_xlabel("Normalized Path", fontsize=label_fontsize)
     ax_band.set_ylabel("Energy (eV)", fontsize=label_fontsize)
     ax_band.grid(True, linestyle=":", alpha=0.6)
@@ -615,12 +1187,18 @@ def main(argv: List[str]) -> int:
     p.add_argument("dft_band_file")
     p.add_argument("wann_band_file")
     p.add_argument("--out", default="band_comparison.png")
-    p.add_argument("--ylim", nargs=2, type=float, default=[-3, 3])
+    p.add_argument("--yrange", nargs=2, type=float, default=[-3, 3], metavar=("YMIN", "YMAX"))
     p.add_argument("--no-fermi-search", action="store_true")
-    p.add_argument("--fermi-from", default=None)
+    p.add_argument("--fermi-from", "--ef-source", dest="fermi_from", default=None)
     p.add_argument("--set-fermi", type=float, default=None)
-    p.add_argument("--no-align-fermi", action="store_true")
+    p.add_argument("--no-align-fermi", "--no-shift-by-ef", dest="no_align_fermi", action="store_true",
+                   help="Do not shift energies by EF. By default EF is auto-detected and shifted to 0 eV.")
     p.add_argument("--wannier-fermi", type=float, default=None)
+    p.add_argument("--epw", action="store_true",
+                   help="Treat the second band file as EPW band.eig (&plot format) instead of Wannier90 2-column data.")
+    p.add_argument("--cell-from", default=None,
+                   help="QE output used to read the reciprocal axes b(1..3). "
+                        "Defaults to --fermi-from, then an auto-detected scf/nscf output.")
     p.add_argument("--labelinfo", default=None)
     p.add_argument("--debug", action="store_true")
     p.add_argument("--label-fontsize", type=int, default=16)
@@ -635,14 +1213,22 @@ def main(argv: List[str]) -> int:
         cand = Path(f"{Path(stem).stem}.labelinfo.dat")
         labelinfo_file = str(cand) if cand.is_file() else None
 
-    ef, ef_src = resolve_ef(args.no_fermi_search, args.fermi_from, args.set_fermi)
+    ef, ef_src = resolve_ef(args.no_fermi_search, args.fermi_from, args.set_fermi, args.dft_band_file)
     align_fermi = (not args.no_align_fermi)
+    if align_fermi and ef is not None:
+        print(f"[INFO] Applied EF shift: E -> E - {ef:.6f} eV ({ef_src}); Fermi level = 0 eV")
+    elif align_fermi and ef is None:
+        print("[WARN] Fermi energy was not found; energies are plotted without EF shift.")
+
+    cell_file = args.cell_from
+    if cell_file is None:
+        cell_file = args.fermi_from if args.fermi_from is not None else find_qe_out_for_fermi(".", _derive_base_prefix_from_band_file(Path(args.dft_band_file)))
 
     plot_bands_and_pdos(
         dft_file=args.dft_band_file,
         wann_file=args.wann_band_file,
         outpng=args.out,
-        ylim=(args.ylim[0], args.ylim[1]),
+        yrange=(args.yrange[0], args.yrange[1]),
         ef=ef,
         ef_src=ef_src,
         align_fermi=align_fermi,
@@ -651,9 +1237,12 @@ def main(argv: List[str]) -> int:
         debug=args.debug,
         label_fontsize=args.label_fontsize,
         tick_fontsize=args.tick_fontsize,
+        epw_mode=args.epw,
+        cell_file=cell_file,
     )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
+
