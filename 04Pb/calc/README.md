@@ -16,7 +16,7 @@ Electron–phonon scattering gives a finite linewidth to each phonon mode. For a
 
 A larger $\gamma_{\mathbf{q}\nu}$ means that electron–phonon scattering contributes more strongly to the decay of that phonon mode.
 
-The figure also shows the mode-resolved electron–phonon coupling strength $\lambda_{\mathbf{q}\nu}$. The **marker size represents $\lambda_{\mathbf{q}\nu}$**: larger markers correspond to phonon modes with stronger electron–phonon coupling.
+The figure also shows the mode-resolved electron–phonon coupling strength $\lambda_{\mathbf{q}\nu}$. The **marker size represents ** $\lambda_{\mathbf{q}\nu}$: larger markers correspond to phonon modes with stronger electron–phonon coupling.
 
 Therefore, the plot provides two complementary pieces of information:
 
@@ -31,22 +31,15 @@ The Eliashberg spectral function $\alpha^2F(\omega)$ describes how phonons at di
 
 The cumulative electron–phonon coupling constant is
 
+
 $$
-\lambda(\omega)
-=
-2\int_0^\omega
-\frac{\alpha^2F(\omega')}{\omega'}
-\,d\omega' .
+\lambda(\omega)= 2\int_0^\omega \frac{\alpha^2F(\omega')}{\omega'}\,d\omega' .
 $$
 
 The total coupling constant is obtained from
 
 $$
-\lambda
-=
-2\int_0^\infty
-\frac{\alpha^2F(\omega)}{\omega}
-\,d\omega .
+\lambda = 2\int_0^\infty \frac{\alpha^2F(\omega)}{\omega}\, d\omega .
 $$
 
 For this calculation,
@@ -64,11 +57,7 @@ The frequency dependence of $\alpha^2F(\omega)$ shows which parts of the phonon 
 Electron–phonon scattering modifies the electronic states through the electron self-energy
 
 $$
-\Sigma_{n\mathbf{k}}(\omega)
-=
-\operatorname{Re}\Sigma_{n\mathbf{k}}(\omega)
-+
-i\,\operatorname{Im}\Sigma_{n\mathbf{k}}(\omega) .
+\Sigma_{n\mathbf{k}}(\omega) = \operatorname{Re}\Sigma_{n\mathbf{k}}(\omega) + i\, \operatorname{Im}\Sigma_{n\mathbf{k}}(\omega) .
 $$
 
 The real part, $\operatorname{Re}\Sigma$, changes the quasiparticle energy, while the imaginary part, $\operatorname{Im}\Sigma$, gives the broadening caused by scattering.
@@ -76,20 +65,13 @@ The real part, $\operatorname{Re}\Sigma$, changes the quasiparticle energy, whil
 The electron linewidth is related to the imaginary part of the self-energy by
 
 $$
-\Gamma_{n\mathbf{k}}
-=
-2\left|
-\operatorname{Im}\Sigma_{n\mathbf{k}}
-\right| .
+\Gamma_{n\mathbf{k}} = 2\left| \operatorname{Im}\Sigma_{n\mathbf{k}}\right| .
 $$
 
 A finite linewidth means that the quasiparticle has a finite lifetime. The corresponding lifetime can be estimated as
 
 $$
-\tau_{n\mathbf{k}}
-=
-\frac{\hbar}
-{\Gamma_{n\mathbf{k}}} .
+\tau_{n\mathbf{k}} = \frac{\hbar} {\Gamma_{n\mathbf{k}}} .
 $$
 
 Therefore, stronger electron–phonon scattering produces a larger linewidth and a shorter quasiparticle lifetime.
