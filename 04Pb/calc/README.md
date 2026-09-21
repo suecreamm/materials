@@ -98,4 +98,4 @@ For sampled states along the selected high-symmetry path within $50,\mathrm{meV}
 * [EPW School / Tutorial 01 (FCC Lead)](https://docs.epw-code.org/tutorials/tutorial_01/index.html)
 * [EPW Input Variables](https://docs.epw-code.org/doc/Inputs.html)
 * [EPW: Electron–phonon coupling using Wannier functions](https://arxiv.org/abs/1604.03525)
-* [G. D. Mahan, *Many-Particle Physics*, 3rd ed.]
+* G. D. Mahan, *Many-Particle Physics*, 3rd ed.
