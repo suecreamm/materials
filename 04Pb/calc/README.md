@@ -37,9 +37,9 @@ The selected high-symmetry path is
 
 Electron–phonon scattering contributes to the linewidth of a phonon mode. For wave vector $`\mathbf{q}`$ and branch index $`\nu`$, the corresponding linewidth is $`\gamma_{\mathbf{q}\nu}`$. A larger linewidth indicates a stronger electron–phonon contribution to phonon broadening and decay.
 
-The mode-resolved coupling strength $`\lambda_{\mathbf{q}\nu}`$ describes the contribution of an individual phonon mode to the electron–phonon interaction. Thus, $`\gamma_{\mathbf{q}\nu}`$ and $`\lambda_{\mathbf{q}\nu}`$ provide complementary information about scattering and coupling strength.
+The mode-resolved coupling strength $`\lambda_{\mathbf{q}\nu}`$ describes the contribution of an individual phonon mode to the electron–phonon interaction. The two quantities describe different aspects of the same mode-resolved electron–phonon interaction: $`\gamma_{\mathbf{q}\nu}`$ characterizes phonon damping, while $`\lambda_{\mathbf{q}\nu}`$ gives the corresponding dimensionless coupling strength.
 
-In the figure below, the marker size represents $`\gamma_{\mathbf{q}\nu}`$: larger markers indicate stronger electron–phonon damping.
+In the figure below, the phonon branches are surrounded by shaded envelopes used to visualize the mode-resolved quantities. The blue envelope is plotted as $`\omega \pm 6\gamma_{\mathbf{q}\nu}`$, so a broader blue region indicates a larger phonon linewidth. The red envelope is plotted as $`\omega \pm 2\lambda_{\mathbf{q}\nu}`$ as a visual encoding of the relative mode-resolved coupling strength. Because $`\lambda_{\mathbf{q}\nu}`$ is dimensionless, the red width should not be interpreted as a physical spectral linewidth.
 
 <p align="center">
   <a href="4epw/linewidth_lambda_T0000.075K.png">
@@ -91,7 +91,7 @@ i\,\mathrm{Im}\,\Sigma_{n\mathbf{k}}(\omega) .
 
 The real part shifts the quasiparticle energy, while the imaginary part produces spectral broadening associated with a finite quasiparticle lifetime.
 
-In the present post-processing (`calc/4epw/99elself.py`), the plotted electron linewidth is defined as
+In the present post-processing (`calc/4epw/99elself.py`), an on-shell electron-linewidth estimate is defined as
 
 ```math
 \Gamma^{\mathrm{plot}}_{n\mathbf{k}}
@@ -107,7 +107,7 @@ with the corresponding lifetime estimate
 \frac{\hbar}{\Gamma^{\mathrm{plot}}_{n\mathbf{k}}} .
 ```
 
-A larger linewidth therefore corresponds to a shorter quasiparticle lifetime.
+This estimate neglects the quasiparticle renormalization factor $`Z`$. A larger linewidth therefore corresponds to a shorter quasiparticle lifetime.
 
 In the figure below, both marker color and size represent the calculated electron linewidth, allowing regions of stronger electron–phonon scattering to be identified along the electronic bands.
 
@@ -125,7 +125,7 @@ For the sampled electronic states along the selected high-symmetry path within $
 
 These values provide an estimate of the characteristic electron–phonon scattering timescale for the selected low-energy states and show its dependence on band index and crystal momentum.
 
-`calc/4epw/99elself.py` post-processes `linewidth.elself.0.075K` and analyzes the electron self-energy along the selected k-path.
+`calc/4epw/99elself.py` post-processes `linewidth.elself.0.075K` and analyzes the imaginary part of the electron self-energy along the selected k-path.
 
 ## References
 
