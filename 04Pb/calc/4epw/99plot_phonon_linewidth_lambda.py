@@ -801,7 +801,7 @@ def draw_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
                             alpha=args.band_alpha, linewidth=0, zorder=4)
             ax.plot(q_path, w, "-", **_line_kw(args.band_lw, color=col, zorder=5))
         handles.append(Patch(facecolor=col, alpha=args.band_alpha, edgecolor=col,
-                             label=rf"$\omega \pm {A:g}\,\gamma$"))
+                             label=rf"linewidth envelope: $\omega \pm {A:g}\,\gamma_{{q\nu}}$"))
     return handles
 
 
@@ -840,7 +840,7 @@ def draw_lambda_bands(ax, q_path: np.ndarray, y_disp: np.ndarray,
     if used:
         handles.append(Patch(facecolor=args.lambda_color, alpha=args.lambda_alpha,
                              edgecolor=args.lambda_color,
-                             label=rf"$\omega \pm {args.lambda_scale:g}\,\lambda$"))
+                             label=rf"visual EPC envelope: $\omega \pm {args.lambda_scale:g}\,\lambda_{{q\nu}}$"))
     return handles
 
 
@@ -1114,9 +1114,9 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
                 print(f"[INFO] linewidth bubbles drawn = {x.size}, gamma_ref = {g_ref:.6g}")
                 bubble_legend(ax_lw, g_ref, args, fs)
 
-        lw_title = f"Linewidth, T = {T_show:.3f} K"
+        lw_title = rf"Phonon linewidth $\gamma_{{q\nu}}$  at  T = {T_show:.3f} K"
         if args.title:
-            lw_title = f"{args.title} - linewidth, T = {T_show:.3f} K"
+            lw_title = rf"{args.title} — phonon linewidth $\gamma_{{q\nu}}$, T = {T_show:.3f} K"
         apply_common_axis_style(ax_lw, q_path, y_disp, labels, tick_idx,
                                 ylabel, lw_title, args, fs,
                                 show_xticklabels=show_xticklabels,
@@ -1132,9 +1132,9 @@ def make_grouped_plot(q_path: np.ndarray, freqs_cm1: np.ndarray,
             ax_lam.legend(handles=lambda_handles, loc="upper right", fontsize=fs["legend"],
                           framealpha=0.85).set_zorder(10)
 
-        lam_title = f"Lambda, T = {T_show:.3f} K"
+        lam_title = rf"Mode-resolved EPC $\lambda_{{q\nu}}$  at  T = {T_show:.3f} K"
         if args.title:
-            lam_title = f"{args.title} - lambda, T = {T_show:.3f} K"
+            lam_title = rf"{args.title} — mode-resolved EPC $\lambda_{{q\nu}}$, T = {T_show:.3f} K"
         apply_common_axis_style(ax_lam, q_path, y_disp, labels, tick_idx,
                                 ylabel, lam_title, args, fs,
                                 show_xticklabels=show_xticklabels,
