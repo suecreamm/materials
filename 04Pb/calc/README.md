@@ -17,6 +17,8 @@ This repository presents a compact first-principles EPW workflow for fcc Pb, inc
 
 [![EPW workflow](EPW_workflow.png)](EPW_workflow.png)
 
+After completing the 1scf, 2ph, and 3nscf calculations with Quantum ESPRESSO 7.5, the following results were obtained using EPW 6.0.
+
 ## Phonon Dispersion
 
 The phonon dispersion provides the phonon spectrum used for the subsequent electron–phonon analysis.
