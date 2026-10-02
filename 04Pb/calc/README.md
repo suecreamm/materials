@@ -66,11 +66,7 @@ The strong variation along the phonon branches shows that electron–phonon scat
 
 The phonon dispersion provides the lattice-dynamical basis for the mode-resolved analysis.
 
-The selected high-symmetry path is
-
-```math
-\Gamma \rightarrow X \rightarrow W \rightarrow L \rightarrow \Gamma \rightarrow K .
-```
+The selected high-symmetry path is $\Gamma \rightarrow X \rightarrow W \rightarrow L \rightarrow \Gamma \rightarrow K$.
 
 <p align="center">
   <a href="phonon_dispersion.png">
@@ -104,13 +100,9 @@ and the total coupling constant is
 \,d\omega .
 ```
 
-For the present calculation,
+For the present calculation, the total electron–phonon coupling is $\lambda \approx 0.686$.
 
-```math
-\lambda \approx 0.686 .
-```
-
-While the total $\lambda$ gives an overall measure of the interaction strength, $\alpha^2F(\omega)$ shows which phonon-frequency regions contribute most strongly.
+The frequency dependence of $\alpha^2F(\omega)$ shows which regions of the phonon spectrum contribute most strongly to the total coupling.
 
 <p align="center">
   <a href="4epw/a2f.png">
