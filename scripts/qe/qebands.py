@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
 Plot QE/plotband-style .gnu band file (segments) with:
-- Default y-range = EF ± 2 eV when --yrange is not explicitly provided.
-- Default x-range = full band-data extent [xmin, xmax] when --xrange is not set.
+- Default: y-range = EF +/- 3 eV. Default x-range = full band-data extent [xmin, xmax].
 - X-axis uses HS labels as tick labels (numbers hidden).
 - Automatic Fermi energy discovery from QE outputs (pw.x, dos.x, projwfc.x),
   preferring outputs whose filename shares the base prefix with the .gnu.
+  The LAST occurrence in a file is used (safe for relax/vc-relax outputs).
+  Falls back to the highest occupied level for fixed-occupation insulators.
 - Optional energy shift by EF (E -> E - EF) with informative message indicating source file.
 - Automatic high-symmetry x-positions discovery from bands.x logs (vertical lines),
   and automatic HS labels from bands.in K_POINTS '!' comments or labelinfo.dat.
 - Optional PDOS/DOS panel on the right when *.pdos_tot / *.pdos_atm#* files exist.
+  PDOS curves use the ldos column only (it already equals the sum of the
+  m-resolved components). Spin-polarized files (ldosup/ldosdw) are summed
+  over spin. The DOS x-range is scaled to the visible energy window.
+- Data export next to the figure: <stem>_band.dat (k, E per segment) and
+  <stem>_pdos.dat (E, tot, one column per atom/orbital), energies as plotted.
 
 Usage
 -----
@@ -24,8 +30,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Sequence
 
-import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 # ----------------------------
@@ -98,13 +106,15 @@ def parse_gnu_file(path: Path, xcol: int, ycol: int) -> List[np.ndarray]:
 # -----------------------------------------
 # Discovery helpers
 # -----------------------------------------
-def _grep_first_float(pattern: re.Pattern, text: str) -> Optional[float]:
-    """Return the first captured float from text or None."""
-    m = pattern.search(text)
-    if not m:
+def _grep_last_float(pattern: re.Pattern, text: str) -> Optional[float]:
+    """Return the LAST captured float (group 1) from text or None."""
+    last = None
+    for m in pattern.finditer(text):
+        last = m
+    if last is None:
         return None
     try:
-        return float(m.group(1))
+        return float(last.group(1))
     except Exception:
         return None
 
@@ -116,18 +126,30 @@ class OutputCase:
     def extract(self, text: str) -> Optional[float]: return None
 
 
+_NUM = r"([\-+]?\d*\.?\d+(?:[Ee][\-+]?\d+)?)"
+
+
 class CasePwLikeEF(OutputCase):
     """
-    QE pw.x/dos.x/projwfc.x style:
-    looks for: 'the Fermi energy is   <value> eV' (case-insensitive).
+    QE pw.x/dos.x/projwfc.x style. Tried in order (last occurrence wins):
+      1) 'the Fermi energy is   <value> eV'
+      2) 'highest occupied, lowest unoccupied level (ev):  <homo>  <lumo>'  -> homo
+      3) 'highest occupied level (ev):  <homo>'
     """
     name = "pw/dos/projwfc:EF"
-    PAT = re.compile(r"the\s+Fermi\s+energy\s+is\s+([\-+]?\d+(?:\.\d+)?)\s*eV", re.IGNORECASE)
+    PATS = [
+        re.compile(r"the\s+Fermi\s+energy\s+is\s+" + _NUM + r"\s*eV", re.IGNORECASE),
+        re.compile(r"highest\s+occupied,\s*lowest\s+unoccupied\s+level\s*\(ev\):\s*" + _NUM, re.IGNORECASE),
+        re.compile(r"highest\s+occupied\s+level\s*\(ev\):\s*" + _NUM, re.IGNORECASE),
+    ]
     def match(self, path: Path) -> bool:
-        s = path.name.lower()
-        return any(k in s for k in ("scf.out", "nscf.out", "dos.out", "projwfc", ".out"))
+        return path.name.lower().endswith(".out") or "projwfc" in path.name.lower()
     def extract(self, text: str) -> Optional[float]:
-        return _grep_first_float(self.PAT, text)
+        for pat in self.PATS:
+            val = _grep_last_float(pat, text)
+            if val is not None:
+                return val
+        return None
 
 
 CASES_EF: List[OutputCase] = [CasePwLikeEF()]
@@ -166,6 +188,7 @@ def discover_fermi_energy(search_dir: Path,
     --------
     1) If basename_hint is provided, prefer files whose name startswith that hint.
     2) Within each tier, apply prefer_order: nscf -> scf -> dos -> projwfc -> out.
+    3) Files without any Fermi-level line are skipped.
     Returns:
       (EF, source_path) where EF is float or None, and source_path is the file used.
     """
@@ -189,7 +212,10 @@ def discover_fermi_energy(search_dir: Path,
     candidates = sorted(all_outs, key=lambda p: (*order_key(p), p.name.lower()))
 
     for p in candidates:
-        txt = read_text(p)
+        try:
+            txt = read_text(p)
+        except Exception:
+            continue
         for case in CASES_EF:
             if case.match(p):
                 ef = case.extract(txt)
@@ -476,6 +502,37 @@ def _read_numeric_table(path: Path) -> Optional[np.ndarray]:
     return arr
 
 
+def _is_spin_polarized(path: Path) -> bool:
+    """
+    Detect collinear spin-polarized projwfc output from the header line.
+    Spin-polarized files have 'ldosup'/'ldosdw' (atomic files) or
+    'dosup'/'dosdw' (pdos_tot) columns.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                s = line.strip()
+                if not s:
+                    continue
+                if s.startswith("#"):
+                    return "dosup" in s.lower()
+                return False
+    except Exception:
+        pass
+    return False
+
+
+def _summed_dos_column(path: Path, arr: np.ndarray) -> np.ndarray:
+    """
+    Return the (l)dos column of a projwfc file, summed over spin if needed.
+    Only the (l)dos column is used: it already equals the sum of the
+    m-resolved pdos components, so adding those again would double count.
+    """
+    if _is_spin_polarized(path) and arr.shape[1] >= 3:
+        return arr[:, 1] + arr[:, 2]
+    return arr[:, 1].copy()
+
+
 def find_total_pdos_file(search_dir: Path, basename_hint: Optional[str]) -> Optional[Path]:
     """Find *.pdos_tot, preferring basename-matched files when available."""
     cands = sorted(search_dir.glob("*.pdos_tot"))
@@ -549,7 +606,7 @@ def load_pdos_grouped(search_dir: Path,
         arr = _read_numeric_table(total_pdos_path)
         if arr is not None:
             energy_grid = arr[:, 0].copy()
-            total_dos = arr[:, 1].copy()
+            total_dos = _summed_dos_column(total_pdos_path, arr)
 
     if energy_grid is None and proj_entries:
         arr0 = _read_numeric_table(proj_entries[0][0])
@@ -570,7 +627,7 @@ def load_pdos_grouped(search_dir: Path,
         if arr is None:
             continue
         e = arr[:, 0].copy()
-        y = np.nansum(arr[:, 1:], axis=1)
+        y = _summed_dos_column(path, arr)  # ldos only (no double counting)
         if shift_by_ef and ef is not None:
             e = e - ef
 
@@ -618,6 +675,7 @@ def plot_segments(
     - If hs_x is provided, use hs_x as xticks and hs_labels as tick labels.
     - No in-plot HS text; only x-axis tick labels.
     - If pdos_data is provided, add a DOS/PDOS panel on the right.
+      Its x-range is scaled to the maximum within the visible energy window.
     """
     if pdos_data is not None:
         fig = plt.figure(figsize=(9, 6))
@@ -663,36 +721,44 @@ def plot_segments(
         ax.grid(alpha=0.3)
 
     if ax_dos is not None and pdos_data is not None:
+        # visible energy window (used to scale the DOS x-range)
+        ylo, yhi = sorted(ax.get_ylim())
+        win = (pdos_data.energy >= ylo) & (pdos_data.energy <= yhi)
+
+        def _wmax(a: np.ndarray) -> float:
+            if not win.any():
+                return 0.0
+            v = float(np.nanmax(a[win]))
+            return v if np.isfinite(v) else 0.0
+
         max_x = 0.0
         if pdos_data.total is not None:
             ax_dos.plot(pdos_data.total, pdos_data.energy, color="red", linewidth=1.6, alpha=0.95, label="Total DOS")
-            try:
-                max_x = max(max_x, float(np.nanmax(pdos_data.total)))
-            except Exception:
-                pass
+            max_x = max(max_x, _wmax(pdos_data.total))
 
         species_order = sorted({key.species for key in pdos_data.projected.keys()})
         cmap_by_species = species_to_cmap_name(species_order)
 
-        by_inst: Dict[Tuple[str, int], List[PdosKey]] = {}
+        # colors are sampled over ALL (instance, orbital) keys of a species,
+        # so different atoms of the same species get different colors
+        by_sp: Dict[str, List[PdosKey]] = {}
         for key in pdos_data.projected.keys():
-            by_inst.setdefault((key.species, key.species_idx), []).append(key)
+            by_sp.setdefault(key.species, []).append(key)
 
-        for species, species_idx in sorted(by_inst.keys(), key=lambda item: (item[0], item[1])):
-            keys = sorted(by_inst[(species, species_idx)], key=lambda k: k.orbital)
+        for species in sorted(by_sp):
+            keys = sorted(by_sp[species], key=lambda k: (k.species_idx, k.orbital))
+            n_inst = len({k.species_idx for k in keys})
             cmap = plt.get_cmap(cmap_by_species.get(species, "viridis"))
             sample_points = np.linspace(0.15, 0.95, max(1, len(keys)))
             for j, key in enumerate(keys):
                 y = pdos_data.projected[key]
+                sp_label = key.species if n_inst <= 1 else f"{key.species}#{key.species_idx}"
                 ax_dos.plot(y, pdos_data.energy,
                             color=cmap(sample_points[j]),
                             linewidth=1.2,
                             alpha=0.95,
-                            label=f"{key.species}#{key.species_idx} {key.orbital}")
-                try:
-                    max_x = max(max_x, float(np.nanmax(y)))
-                except Exception:
-                    pass
+                            label=f"{sp_label} {key.orbital}")
+                max_x = max(max_x, _wmax(y))
 
         if max_x <= 0.0 or not np.isfinite(max_x):
             max_x = 1.0
@@ -709,6 +775,56 @@ def plot_segments(
     else:
         fig.subplots_adjust(left=0.10, right=0.97, bottom=0.12, top=0.98, wspace=0.05)
     return fig
+
+
+# ----------------------------
+# Data export (.dat)
+# ----------------------------
+def _energy_note(ef: Optional[float], shifted: bool) -> str:
+    if ef is None:
+        return "energy: raw (EF not found)"
+    if shifted:
+        return f"energy: E - EF, EF = {ef:.6f} eV"
+    return f"energy: raw (not shifted), EF = {ef:.6f} eV"
+
+
+def write_band_dat(path: Path, arrays: List[np.ndarray], ef: Optional[float], shifted: bool) -> None:
+    """Write the plotted band data: one block per band segment, blank-line separated."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# band data as plotted; {_energy_note(ef, shifted)}\n")
+        f.write(f"# {len(arrays)} segment(s), separated by blank lines\n")
+        f.write("# k_path        E(eV)\n")
+        for i, arr in enumerate(arrays):
+            if i:
+                f.write("\n")
+            for kx, en in arr:
+                f.write(f"{kx:14.8f} {en:14.8f}\n")
+
+
+def write_pdos_dat(path: Path, pdos_data: PdosData, ef: Optional[float], shifted: bool) -> List[str]:
+    """
+    Write the plotted DOS/PDOS data on the common energy grid.
+    Columns: E, tot (if available), then one column per (atom, orbital).
+    Returns the list of column names.
+    """
+    keys = sorted(pdos_data.projected.keys(), key=lambda k: (k.species, k.species_idx, k.orbital))
+    names = ["E(eV)"]
+    cols = [pdos_data.energy]
+    if pdos_data.total is not None:
+        names.append("tot")
+        cols.append(pdos_data.total)
+    for key in keys:
+        names.append(f"{key.species}#{key.species_idx}_{key.orbital}")
+        cols.append(pdos_data.projected[key])
+
+    data = np.column_stack(cols)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# DOS/PDOS data as plotted; {_energy_note(ef, shifted)}\n")
+        f.write("# " + " ".join(f"{i + 1}:{n}" for i, n in enumerate(names)) + "\n")
+        f.write("#" + "".join(f"{n:>16s}" for n in names)[1:] + "\n")
+        for row in data:
+            f.write("".join(f"{v:16.6e}" for v in row) + "\n")
+    return names
 
 
 # ----------------------------
@@ -743,7 +859,7 @@ def main():
 
     # ranges
     p.add_argument("--yrange", nargs=2, type=float, metavar=("YMIN", "YMAX"),
-                   help="Set y-range; if omitted, defaults to EF±3 eV when EF is found.")
+                   help="Set y-range; if omitted, defaults to EF +/- 3 eV when EF is found.")
     p.add_argument("--xrange", nargs=2, type=float, metavar=("XMIN", "XMAX"),
                    help="Set x-range explicitly (e.g., --xrange 0.0 3.5).")
 
@@ -756,8 +872,12 @@ def main():
     p.add_argument("--pdf", type=Path, default=None, help="PDF output path (default: derive from input)")
 
     # EF discovery/shift
-    p.add_argument("--ef-auto", default=True, action="store_true",
-                   help="Prefer to discover Fermi energy from QE outputs in the same directory.")
+    p.add_argument("--ef-auto", dest="ef_auto", action="store_true", default=True,
+                   help="Auto-discover the Fermi energy from QE outputs in the same directory (default ON).")
+    p.add_argument("--no-ef-auto", dest="ef_auto", action="store_false",
+                   help="Disable automatic Fermi energy discovery (use --ef or --ef-source instead).")
+    p.add_argument("--ef", type=float, default=None,
+                   help="Set the Fermi energy (eV) manually; overrides --ef-source and auto discovery.")
     p.add_argument("--ef-source", type=Path,
                    help="Explicit output file to read EF from (overrides auto discovery).")
     p.add_argument("--shift-by-ef", dest="shift_by_ef", default=True, action="store_true",
@@ -777,7 +897,7 @@ def main():
     p.add_argument("--labelinfo", type=Path,
                    help="Explicit labelinfo.dat file containing HS labels.")
     p.add_argument("--hs-labels", type=str,
-                   help='Comma-separated labels for HS points, e.g., "Γ,M,K,Γ".')
+                   help='Comma-separated labels for HS points, e.g., "G,M,K,G".')
 
     args = p.parse_args()
 
@@ -799,16 +919,24 @@ def main():
 
     # ---- EF discovery ----
     ef_val: Optional[float] = None
-    ef_src: Optional[Path] = None
-    if args.ef_source:
+    ef_src_name = "unknown"
+    if args.ef is not None:
+        ef_val = float(args.ef)
+        ef_src_name = "manual --ef"
+    elif args.ef_source:
         txt = read_text(args.ef_source)
         for case in CASES_EF:
-            if case.match(args.ef_source):
-                ef_val = case.extract(txt); ef_src = args.ef_source if ef_val is not None else None
+            ef_val = case.extract(txt)
+            if ef_val is not None:
+                ef_src_name = args.ef_source.name
                 break
-    else:
+        if ef_val is None:
+            print(f"[WARN] No Fermi level found in {args.ef_source.name}.")
+    elif args.ef_auto:
         base_prefix = _derive_base_prefix_from_gnu(args.gnu_file)
         ef_val, ef_src = discover_fermi_energy(args.gnu_file.parent, basename_hint=base_prefix)
+        if ef_src is not None:
+            ef_src_name = ef_src.name
 
     # ---- EF shift (optional) ----
     if ef_val is not None and args.shift_by_ef:
@@ -818,12 +946,11 @@ def main():
             arr2[:, 1] = arr2[:, 1] - ef_val
             shifted.append(arr2)
         arrays = shifted
-        src_name = ef_src.name if ef_src is not None else "unknown"
-        print(f"[INFO] Applied EF shift: E -> E - {ef_val:.6f} eV (found at {src_name})")
+        print(f"[INFO] Applied EF shift: E -> E - {ef_val:.6f} eV (found at {ef_src_name})")
     elif ef_val is None and args.shift_by_ef:
         print("[WARN] --shift-by-ef requested but EF not found; skipping shift.")
 
-    # ---- y-range defaulting to EF ± 2 eV if not specified ----
+    # ---- y-range defaulting to EF +/- 3 eV if not specified ----
     chosen_yrange: Optional[Tuple[float, float]] = None
     if args.yrange is not None:
         chosen_yrange = tuple(args.yrange)
@@ -943,8 +1070,17 @@ def main():
     fig.savefig(pdf_path)
     print(f"Saved: {png_path} and {pdf_path}")
 
+    # ---- export plotted data (same name series as the figure) ----
+    out_stem = png_path.with_suffix("")
+    was_shifted = bool(ef_val is not None and args.shift_by_ef)
+    band_dat = out_stem.parent / f"{out_stem.name}_band.dat"
+    write_band_dat(band_dat, arrays, ef_val, was_shifted)
+    print(f"Saved: {band_dat}")
+    if pdos_data is not None:
+        pdos_dat = out_stem.parent / f"{out_stem.name}_pdos.dat"
+        names = write_pdos_dat(pdos_dat, pdos_data, ef_val, was_shifted)
+        print(f"Saved: {pdos_dat} (columns: {', '.join(names)})")
+
 
 if __name__ == "__main__":
     main()
-
-
