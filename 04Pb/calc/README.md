@@ -184,9 +184,9 @@ The main calculation stages are:
 | `4.4epw` | $\alpha^2F(\omega)$ and integrated coupling |
 | `4.5epw` | Electron self-energy, linewidths, and quasiparticle lifetimes |
 
-The `1scf`, `2ph`, and `3nscf` calculations were performed with Quantum ESPRESSO 7.5. Electron–phonon quantities were then evaluated and interpolated with EPW 6.0.
+### Computational Details
 
-**First-principles analysis of electron–phonon scattering in fcc Pb using Quantum ESPRESSO 7.5 and EPW 6.0.**
+The `1scf`, `2ph`, and `3nscf` calculations were performed with Quantum ESPRESSO 7.5dev, followed by electron–phonon calculations and Wannier interpolation using EPW 6.0.
 
 ---
 
