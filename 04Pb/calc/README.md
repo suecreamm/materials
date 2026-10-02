@@ -188,6 +188,11 @@ The main calculation stages are:
 
 The `1scf`, `2ph`, and `3nscf` calculations were performed with Quantum ESPRESSO 7.5dev, followed by electron–phonon calculations and Wannier interpolation using EPW 6.0.
 
+Input files and Python scripts used for post-processing, analysis, and visualization are available in the corresponding calculation directories.
+<a href="https://github.com/suecreamm/materials/tree/main/04Pb/calc" target="_blank" rel="noopener noreferrer">
+[View input files and post-processing scripts]
+</a>
+
 ---
 
 ## References
