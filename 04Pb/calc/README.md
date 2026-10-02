@@ -1,28 +1,70 @@
 # Electron–Phonon Scattering in Pb
-Mode-resolved coupling, linewidths, self-energy, and quasiparticle lifetimes
 
-## Overview
+**Mode-resolved coupling, linewidths, self-energy, and quasiparticle lifetimes**
 
-This repository presents a compact first-principles EPW workflow for fcc Pb, including phonon dispersion, phonon linewidths, mode-resolved electron–phonon coupling, the Eliashberg spectral function, and electron self-energy analysis. The example demonstrates practical calculations of lattice dynamics and electron–phonon interactions, with emphasis on linewidths, coupling strengths, and quasiparticle lifetimes.
+## Question
 
-## Table of Contents
+**How strongly does electron–phonon scattering vary across phonon modes and electronic states?**
 
-* [Workflow](#workflow)
-* [Phonon Dispersion](#phonon-dispersion)
-* [Phonon Linewidth & Electron–Phonon Coupling](#phonon-linewidth--electronphonon-coupling)
-* [Eliashberg Spectral Function](#eliashberg-spectral-function)
-* [Electron Self-Energy, Quasiparticle Linewidth, and Lifetime](#electron-self-energy-quasiparticle-linewidth-and-lifetime)
-* [References](#references)
+A linewidth can contain contributions from several scattering channels,
 
-## Workflow
+```math
+\Gamma_{\mathrm{tot}}
+\approx
+\Gamma_{\mathrm{e-ph}}
++
+\Gamma_{\mathrm{ph-ph}}
++
+\Gamma_{\mathrm{defects}}
++\cdots .
+```
 
-[![EPW workflow](EPW_workflow.png)](EPW_workflow.png)
+This project focuses on the electron–phonon contribution in fcc Pb and resolves its dependence on phonon mode, momentum, and electronic state.
 
-After completing the 1scf, 2ph, and 3nscf calculations with Quantum ESPRESSO 7.5, the following results were obtained using EPW 6.0.
+---
+
+## Key Result: Mode-Resolved Phonon Scattering
+
+The most direct view of the momentum- and mode-dependent interaction is given by the phonon linewidth $\gamma_{\mathbf q\nu}$ and the mode-resolved coupling strength $\lambda_{\mathbf q\nu}$.
+
+* $\gamma_{\mathbf q\nu}$ describes the electron–phonon contribution to phonon broadening.
+* $\lambda_{\mathbf q\nu}$ measures the dimensionless coupling strength associated with an individual phonon mode.
+
+The figure below maps both quantities directly onto the phonon branches.
+
+The blue envelope is plotted as
+
+```math
+\omega_{\mathbf q\nu}
+\pm
+6\gamma_{\mathbf q\nu},
+```
+
+so broader blue regions indicate larger phonon linewidths.
+
+The red envelope is plotted as
+
+```math
+\omega_{\mathbf q\nu}
+\pm
+2\lambda_{\mathbf q\nu},
+```
+
+as a visual encoding of the relative mode-resolved coupling strength. Because $\lambda_{\mathbf q\nu}$ is dimensionless, the red width is not a physical spectral linewidth.
+
+<p align="center">
+  <a href="4epw/linewidth_lambda_T0000.075K.png">
+    <img src="4epw/linewidth_lambda_T0000.075K.png" alt="Phonon linewidth and electron-phonon coupling" width="650">
+  </a>
+</p>
+
+The variation along the phonon branches shows that electron–phonon scattering is strongly dependent on mode and momentum and cannot be represented fully by a single averaged coupling constant.
+
+---
 
 ## Phonon Dispersion
 
-The phonon dispersion provides the phonon spectrum used for the subsequent electron–phonon analysis.
+The phonon dispersion provides the lattice-dynamical basis for the mode-resolved analysis.
 
 The selected high-symmetry path is
 
@@ -36,34 +78,30 @@ The selected high-symmetry path is
   </a>
 </p>
 
-## Phonon Linewidth & Electron–Phonon Coupling
-
-Electron–phonon scattering contributes to the linewidth of a phonon mode. For wave vector $`\mathbf{q}`$ and branch index $`\nu`$, the corresponding linewidth is $`\gamma_{\mathbf{q}\nu}`$. A larger linewidth indicates a stronger electron–phonon contribution to phonon broadening and decay.
-
-The mode-resolved coupling strength $`\lambda_{\mathbf{q}\nu}`$ describes the contribution of an individual phonon mode to the electron–phonon interaction. The two quantities describe different aspects of the same mode-resolved electron–phonon interaction: $`\gamma_{\mathbf{q}\nu}`$ characterizes phonon damping, while $`\lambda_{\mathbf{q}\nu}`$ gives the corresponding dimensionless coupling strength.
-
-In the figure below, the phonon branches are surrounded by shaded envelopes used to visualize the mode-resolved quantities. The blue envelope is plotted as $`\omega \pm 6\gamma_{\mathbf{q}\nu}`$, so a broader blue region indicates a larger phonon linewidth. The red envelope is plotted as $`\omega \pm 2\lambda_{\mathbf{q}\nu}`$ as a visual encoding of the relative mode-resolved coupling strength. Because $`\lambda_{\mathbf{q}\nu}`$ is dimensionless, the red width should not be interpreted as a physical spectral linewidth.
-
-<p align="center">
-  <a href="4epw/linewidth_lambda_T0000.075K.png">
-    <img src="4epw/linewidth_lambda_T0000.075K.png" alt="Phonon linewidth and electron-phonon coupling" width="650">
-  </a>
-</p>
+---
 
 ## Eliashberg Spectral Function
 
-The Eliashberg spectral function $`\alpha^2F(\omega)`$ shows how phonons at different frequencies contribute to the electron–phonon interaction.
+The Eliashberg spectral function $\alpha^2F(\omega)$ resolves the electron–phonon interaction by phonon frequency.
 
-The cumulative coupling strength is
+The cumulative coupling is
 
 ```math
-\lambda(\omega) = 2\int_0^\omega \frac{\alpha^2F(\omega')}{\omega'}\,d\omega' .
+\lambda(\omega)
+=
+2\int_0^\omega
+\frac{\alpha^2F(\omega')}{\omega'}
+\,d\omega' ,
 ```
 
-The total electron–phonon coupling constant is
+and the total electron–phonon coupling constant is
 
 ```math
-\lambda = 2\int_0^\infty \frac{\alpha^2F(\omega)}{\omega}\,d\omega .
+\lambda
+=
+2\int_0^\infty
+\frac{\alpha^2F(\omega)}{\omega}
+\,d\omega .
 ```
 
 For the present calculation,
@@ -72,13 +110,15 @@ For the present calculation,
 \lambda \approx 0.686 .
 ```
 
-The frequency dependence of $`\alpha^2F(\omega)`$ identifies which parts of the phonon spectrum contribute most strongly to the total coupling.
+The frequency dependence of $\alpha^2F(\omega)$ identifies which parts of the phonon spectrum contribute most strongly to the integrated coupling.
 
 <p align="center">
   <a href="4epw/a2f.png">
     <img src="4epw/a2f.png" alt="Eliashberg spectral function" width="650">
   </a>
 </p>
+
+---
 
 ## Electron Self-Energy, Quasiparticle Linewidth, and Lifetime
 
@@ -92,14 +132,16 @@ Electron–phonon scattering modifies the electronic states through the electron
 i\,\mathrm{Im}\,\Sigma_{n\mathbf{k}}(\omega) .
 ```
 
-The real part shifts the quasiparticle energy, while the imaginary part produces spectral broadening associated with a finite quasiparticle lifetime.
+The real part shifts the quasiparticle energy, while the imaginary part produces a finite spectral linewidth.
 
-In the present post-processing (`calc/4epw/99elself.py`), an on-shell electron-linewidth estimate is defined as
+In the present post-processing (`calc/4epw/99elself.py`), the plotted on-shell linewidth is defined as
 
 ```math
 \Gamma^{\mathrm{plot}}_{n\mathbf{k}}
 =
-2\left|\mathrm{Im}\,\Sigma_{n\mathbf{k}}\right| ,
+2\left|
+\mathrm{Im}\,\Sigma_{n\mathbf{k}}
+\right| ,
 ```
 
 with the corresponding lifetime estimate
@@ -107,12 +149,11 @@ with the corresponding lifetime estimate
 ```math
 \tau_{n\mathbf{k}}
 \approx
-\frac{\hbar}{\Gamma^{\mathrm{plot}}_{n\mathbf{k}}} .
+\frac{\hbar}
+{\Gamma^{\mathrm{plot}}_{n\mathbf{k}}} .
 ```
 
-This estimate neglects the quasiparticle renormalization factor $`Z`$. A larger linewidth therefore corresponds to a shorter quasiparticle lifetime.
-
-In the figure below, both marker color and size represent the calculated electron linewidth, allowing regions of stronger electron–phonon scattering to be identified along the electronic bands.
+This estimate neglects the quasiparticle renormalization factor $Z$.
 
 <p align="center">
   <a href="4epw/elself_bands.png">
@@ -120,15 +161,42 @@ In the figure below, both marker color and size represent the calculated electro
   </a>
 </p>
 
-For the sampled electronic states along the selected high-symmetry path within $`50\,\mathrm{meV}`$ of the Fermi level $`E_F`$:
+For the sampled states along the selected high-symmetry path within $50\,\mathrm{meV}$ of the Fermi level $E_F$:
 
-* Mean linewidth: $`16.198\,\mathrm{meV}`$
-* Maximum linewidth: $`26.862\,\mathrm{meV}`$
-* Mean quasiparticle lifetime: $`48.19\,\mathrm{fs}`$
+* Mean linewidth: $16.198\,\mathrm{meV}$
+* Maximum linewidth: $26.862\,\mathrm{meV}$
+* Mean quasiparticle lifetime: $48.19\,\mathrm{fs}$
 
-These values provide an estimate of the characteristic electron–phonon scattering timescale for the selected low-energy states and show its dependence on band index and crystal momentum.
+These values provide an estimate of the electron–phonon scattering timescale for the selected low-energy electronic states.
 
-`calc/4epw/99elself.py` post-processes `linewidth.elself.0.075K` and analyzes the imaginary part of the electron self-energy along the selected k-path.
+---
+
+## Workflow
+
+<p align="center">
+  <a href="EPW_workflow.png">
+    <img src="EPW_workflow.png" alt="EPW workflow" width="850">
+  </a>
+</p>
+
+The main stages are:
+
+| Stage | Purpose |
+|---|---|
+| `1scf` | Ground-state electronic structure |
+| `2ph` | DFPT phonons and perturbation potentials |
+| `3nscf` | Dense electronic states for Wannier interpolation |
+| `4.1epw` | Wannierization and coarse electron–phonon matrix elements |
+| `4.2epw` | Interpolation check |
+| `4.3epw` | Mode- and q-resolved phonon linewidths and $\lambda_{\mathbf q\nu}$ |
+| `4.4epw` | $\alpha^2F(\omega)$ and integrated electron–phonon coupling |
+| `4.5epw` | Electron self-energy, linewidths, and quasiparticle lifetimes |
+
+After the `1scf`, `2ph`, and `3nscf` calculations with Quantum ESPRESSO 7.5, the electron–phonon quantities are evaluated and interpolated using EPW 6.0.
+
+**First-principles analysis of electron–phonon scattering in fcc Pb using Quantum ESPRESSO 7.5 and EPW 6.0.**
+
+---
 
 ## References
 
