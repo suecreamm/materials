@@ -1,4 +1,5 @@
-# Pb EPW Example
+# Electron–Phonon Scattering in Pb
+Mode-resolved coupling, linewidths, self-energy, and quasiparticle lifetimes
 
 ## Overview
 
